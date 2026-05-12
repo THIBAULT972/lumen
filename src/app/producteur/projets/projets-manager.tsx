@@ -200,10 +200,14 @@ function ProjectCard({
   const [pending, startTransition] = useTransition();
 
   function handleArchive() {
-    startTransition(() => archiveProject(project.id));
+    startTransition(async () => {
+      await archiveProject(project.id);
+    });
   }
   function handleRestore() {
-    startTransition(() => restoreProject(project.id));
+    startTransition(async () => {
+      await restoreProject(project.id);
+    });
   }
 
   const assignedProducteurs = project.producteur_ids
@@ -427,7 +431,7 @@ function ProjectFormFields({
               Nouveau client
             </button>
           </div>
-          <Select value={clientId} onValueChange={setClientId}>
+          <Select value={clientId} onValueChange={(v) => setClientId(v ?? "")}>
             <SelectTrigger className="h-11 bg-foreground/[0.03]">
               <SelectValue placeholder="Sélectionne un client…" />
             </SelectTrigger>

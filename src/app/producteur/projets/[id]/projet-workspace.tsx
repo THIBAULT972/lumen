@@ -305,7 +305,9 @@ function EpisodeListItem({
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   function move(direction: "up" | "down") {
-    startTransition(() => moveEpisode(episode.id, projectId, direction));
+    startTransition(async () => {
+      await moveEpisode(episode.id, projectId, direction);
+    });
   }
 
   return (
