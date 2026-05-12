@@ -274,6 +274,7 @@ Réinitialisables via `npm run seed` (idempotent).
   - Pour DropdownMenuTrigger : passer `className` directement (le composant rend déjà un `<button>`), **pas de wrapper `<button>` enfant**.
   - **`DropdownMenuItem` utilise `onClick`, PAS `onSelect`** (Radix). `onSelect` est silencieusement ignoré → l'item paraît mort. Pour empêcher la fermeture du menu après le clic (utile quand l'action est inline genre regen mdp), passer `closeOnClick={false}`.
 - ✋ **Le proxy ne doit PAS traiter les requêtes non-GET.** Les server actions (POST) et les RSC fetches utilisent un protocole streamé que Next compose lui-même. Si le proxy fait `NextResponse.next({ request })` ou écrit dans la response (typique du pattern Supabase SSR pour rafraîchir les cookies), le stream est corrompu et le client reçoit `An unexpected response was received from the server`. **Solution** : `if (request.method !== "GET") return NextResponse.next();` en début de proxy. La session reste rafraîchie par `createClient()` côté serveur.
+- ✋ **Un fichier `"use server"` ne peut exporter QUE des fonctions async.** Exporter une `const` (ex: tableau d'enum) ou un objet fait crasher l'app au render avec `A "use server" file can only export async functions, found object`. Mettre les constantes/types partagés dans un fichier séparé (ex: `episode-types.ts`) que `actions.ts` et la UI importent tous les deux.
 
 ---
 
