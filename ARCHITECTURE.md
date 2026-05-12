@@ -176,7 +176,7 @@ Projet ──┬──> Émission 1 ──┬──> Mission 1 (droniste, 15/07,
          ├──> Émission 2 ──> …
          └──> Émission N
 ```
-- 1 projet est rattaché à 1 client (`projects.client_id`).
+- Un projet a 2 natures : **"client"** (`client_id` rempli, livrables apparaîtront dans le hub du client) ou **"média/interne"** (`client_id` null, production pour les médias propres du studio). Aucun impact technique en BDD, juste un branchement UI à la création + un badge.
 - 1 émission a 2 dates distinctes : **production** + **parution**.
 - 1 mission a 1 compétence requise + lieu + horaire + prix + statut.
 
@@ -247,8 +247,8 @@ Réinitialisables via `npm run seed` (idempotent).
 |-------|--------|---------|
 | **P0** | ✅ | Bootstrap Next 16, design system OLED+glass, page login visuelle |
 | **P1** | ✅ | Auth, schéma BDD complet, proxy de session, 3 dashboards minimaux, seed |
-| **P2.1** | 🚧 en cours | Gestion équipe + compétences (côté producteur) |
-| **P2.2** | ⏳ | Projets + émissions |
+| **P2.1** | ✅ | Gestion équipe + compétences (côté producteur) |
+| **P2.2** | ✅ | Projets (client/média) + émissions (réorderable) |
 | **P2.3** | ⏳ | Missions + broadcast Uber + désistement+pénalité |
 | **P3** | ⏳ | Hubs clients (upload/download fichiers) — Supabase Storage |
 | **P4** | ⏳ | Calendrier + notifications temps réel (Supabase Realtime) |

@@ -9,7 +9,7 @@ const links = [
   { href: "/producteur", label: "Vue d'ensemble", icon: LayoutDashboard, exact: true },
   { href: "/producteur/equipe", label: "Équipe", icon: Users },
   { href: "/producteur/competences", label: "Compétences", icon: Tags },
-  { href: "/producteur/projets", label: "Projets", icon: FolderOpen, disabled: true },
+  { href: "/producteur/projets", label: "Projets", icon: FolderOpen },
   { href: "/producteur/calendrier", label: "Calendrier", icon: Calendar, disabled: true },
 ];
 
