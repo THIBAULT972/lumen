@@ -283,16 +283,14 @@ function MemberRow({
             align="end"
             className="glass-panel border-white/10"
           >
-            <DropdownMenuItem onSelect={() => setEditOpen(true)}>
+            <DropdownMenuItem onClick={() => setEditOpen(true)}>
               <Pencil className="mr-2 h-4 w-4" />
               Modifier
             </DropdownMenuItem>
             <DropdownMenuItem
               disabled={regenPending}
-              onSelect={(e) => {
-                e.preventDefault();
-                handleRegen();
-              }}
+              closeOnClick={false}
+              onClick={handleRegen}
             >
               <KeyRound className="mr-2 h-4 w-4" />
               {regenPending ? "Génération…" : "Régénérer le mot de passe"}
@@ -300,7 +298,7 @@ function MemberRow({
             <DropdownMenuSeparator />
             <DropdownMenuItem
               variant="destructive"
-              onSelect={() => setDeleteOpen(true)}
+              onClick={() => setDeleteOpen(true)}
             >
               <Trash2 className="mr-2 h-4 w-4" />
               Supprimer

@@ -268,6 +268,7 @@ Réinitialisables via `npm run seed` (idempotent).
   - **Pas de prop `asChild`** (Radix-only). Base UI utilise `render={<MonComposant />}` à la place.
   - Pattern recommandé pour avoir un Button stylé qui ouvre une Dialog : **ne pas utiliser DialogTrigger** du tout, contrôler `open`/`onOpenChange` manuellement avec un `<Button onClick={() => setOpen(true)}>` à côté.
   - Pour DropdownMenuTrigger : passer `className` directement (le composant rend déjà un `<button>`), **pas de wrapper `<button>` enfant**.
+  - **`DropdownMenuItem` utilise `onClick`, PAS `onSelect`** (Radix). `onSelect` est silencieusement ignoré → l'item paraît mort. Pour empêcher la fermeture du menu après le clic (utile quand l'action est inline genre regen mdp), passer `closeOnClick={false}`.
 - ✋ **Le proxy ne doit PAS traiter les requêtes non-GET.** Les server actions (POST) et les RSC fetches utilisent un protocole streamé que Next compose lui-même. Si le proxy fait `NextResponse.next({ request })` ou écrit dans la response (typique du pattern Supabase SSR pour rafraîchir les cookies), le stream est corrompu et le client reçoit `An unexpected response was received from the server`. **Solution** : `if (request.method !== "GET") return NextResponse.next();` en début de proxy. La session reste rafraîchie par `createClient()` côté serveur.
 
 ---

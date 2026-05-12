@@ -184,13 +184,13 @@ function SkillRow({ skill }: { skill: SkillWithUsage }) {
             <MoreHorizontal className="h-4 w-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="glass-panel border-white/10">
-            <DropdownMenuItem onSelect={() => setRenameOpen(true)}>
+            <DropdownMenuItem onClick={() => setRenameOpen(true)}>
               <Pencil className="mr-2 h-4 w-4" />
               Renommer
             </DropdownMenuItem>
             <DropdownMenuItem
               variant="destructive"
-              onSelect={() => setDeleteOpen(true)}
+              onClick={() => setDeleteOpen(true)}
             >
               <Trash2 className="mr-2 h-4 w-4" />
               Supprimer
