@@ -63,8 +63,23 @@ export default async function ProjetDetailPage({
   if (!projectRes.data) notFound();
   const project = projectRes.data;
 
+  if (episodesRes.error) {
+    console.error(
+      "[page projet] failed to load episodes:",
+      episodesRes.error.message,
+      episodesRes.error.hint,
+    );
+  }
+  if (platformsRes.error) {
+    console.error(
+      "[page projet] failed to load platforms:",
+      platformsRes.error.message,
+    );
+  }
+
   const missions = missionsRes.data ?? [];
   const platforms: Platform[] = platformsRes.data ?? [];
+  const episodesError = episodesRes.error?.message ?? null;
   const episodes: Episode[] = (episodesRes.data ?? []).map((e) => ({
     id: e.id,
     name: e.name,
@@ -148,11 +163,27 @@ export default async function ProjetDetailPage({
         </div>
       </section>
 
-      <ProjetWorkspace
-        projectId={project.id}
-        episodes={episodes}
-        availablePlatforms={platforms}
-      />
+      {episodesError ? (
+        <div className="glass-panel rounded-2xl border border-destructive/30 bg-destructive/5 p-6 text-sm">
+          <p className="font-medium text-destructive">
+            Impossible de charger les émissions.
+          </p>
+          <p className="mt-1 text-muted-foreground">
+            <code className="font-mono">{episodesError}</code>
+          </p>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Si tu viens d'ajouter une nouvelle fonctionnalité côté code, une
+            migration SQL est probablement à appliquer dans Supabase
+            (dossier <code className="font-mono">db/migrations/</code>).
+          </p>
+        </div>
+      ) : (
+        <ProjetWorkspace
+          projectId={project.id}
+          episodes={episodes}
+          availablePlatforms={platforms}
+        />
+      )}
     </>
   );
 }
