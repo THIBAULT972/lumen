@@ -47,39 +47,51 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* LUMEN — Light palette (off-white + accents néon conservés) */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --background: oklch(0.99 0.003 260);
+  --foreground: oklch(0.16 0.01 260);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.16 0.01 260);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --popover-foreground: oklch(0.16 0.01 260);
+  --primary: oklch(0.55 0.22 258);
+  --primary-foreground: oklch(0.99 0.003 260);
+  --secondary: oklch(0.96 0.005 260);
+  --secondary-foreground: oklch(0.16 0.01 260);
+  --muted: oklch(0.95 0.005 260);
+  --muted-foreground: oklch(0.45 0.01 260);
+  --accent: oklch(0.55 0.25 305);
+  --accent-foreground: oklch(0.99 0.003 260);
+  --destructive: oklch(0.6 0.25 22);
+  --border: oklch(0.16 0.01 260 / 10%);
+  --input: oklch(0.16 0.01 260 / 8%);
+  --ring: oklch(0.55 0.22 258 / 50%);
+  --chart-1: oklch(0.55 0.22 258);
+  --chart-2: oklch(0.55 0.25 305);
+  --chart-3: oklch(0.6 0.18 200);
+  --chart-4: oklch(0.5 0.2 340);
+  --chart-5: oklch(0.65 0.15 230);
   --radius: 0.75rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: oklch(0.97 0.005 260);
+  --sidebar-foreground: oklch(0.16 0.01 260);
+  --sidebar-primary: oklch(0.55 0.22 258);
+  --sidebar-primary-foreground: oklch(0.99 0.003 260);
+  --sidebar-accent: oklch(0.94 0.005 260);
+  --sidebar-accent-foreground: oklch(0.16 0.01 260);
+  --sidebar-border: oklch(0.16 0.01 260 / 8%);
+  --sidebar-ring: oklch(0.55 0.22 258 / 50%);
+
+  /* Glass surface uses dark ink on light background. */
+  --glass-from: oklch(0.16 0.01 260 / 3%);
+  --glass-to: oklch(0.16 0.01 260 / 1%);
+  --glass-border: oklch(0.16 0.01 260 / 10%);
+  --glass-highlight: oklch(1 0 0 / 50%);
+  --glass-shadow: oklch(0.16 0.01 260 / 12%);
+
+  /* Hairline surface (used for cards, panels, hover) */
+  --surface-1: oklch(0.16 0.01 260 / 4%);
+  --surface-2: oklch(0.16 0.01 260 / 7%);
 }
 
 /* LUMEN — Dark OLED palette
@@ -120,6 +132,16 @@
   --sidebar-accent-foreground: oklch(0.98 0 0);
   --sidebar-border: oklch(1 0 0 / 6%);
   --sidebar-ring: oklch(0.65 0.22 258 / 60%);
+
+  /* Glass surface uses white over OLED. */
+  --glass-from: oklch(1 0 0 / 4%);
+  --glass-to: oklch(1 0 0 / 1%);
+  --glass-border: oklch(1 0 0 / 8%);
+  --glass-highlight: oklch(1 0 0 / 6%);
+  --glass-shadow: oklch(0 0 0 / 80%);
+
+  --surface-1: oklch(1 0 0 / 3%);
+  --surface-2: oklch(1 0 0 / 6%);
 }
 
 @layer base {
@@ -141,19 +163,28 @@
     letter-spacing: -0.02em;
   }
 
-  /* Glass panel: subtle frosted surface with a hairline border */
+  /* Glass panel: subtle frosted surface with a hairline border.
+     Adapts automatically to dark/light via CSS variables. */
   .glass-panel {
     background: linear-gradient(
       135deg,
-      oklch(1 0 0 / 4%) 0%,
-      oklch(1 0 0 / 1%) 100%
+      var(--glass-from) 0%,
+      var(--glass-to) 100%
     );
     backdrop-filter: blur(24px) saturate(140%);
     -webkit-backdrop-filter: blur(24px) saturate(140%);
-    border: 1px solid oklch(1 0 0 / 8%);
+    border: 1px solid var(--glass-border);
     box-shadow:
-      inset 0 1px 0 0 oklch(1 0 0 / 6%),
-      0 24px 60px -20px oklch(0 0 0 / 80%);
+      inset 0 1px 0 0 var(--glass-highlight),
+      0 24px 60px -20px var(--glass-shadow);
+  }
+
+  /* Hairline surface (used for inputs, soft hovers, chips) */
+  .surface-1 {
+    background: var(--surface-1);
+  }
+  .surface-2 {
+    background: var(--surface-2);
   }
 
   /* Neon gradient text */

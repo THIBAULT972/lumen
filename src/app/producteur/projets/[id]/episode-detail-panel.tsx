@@ -214,7 +214,7 @@ export const EpisodeDetailPanel = forwardRef<PanelHandle, Props>(
                 value={form.name}
                 onChange={(e) => update("name", e.target.value)}
                 required
-                className="h-11 bg-white/[0.03] text-base font-medium"
+                className="h-11 bg-foreground/[0.03] text-base font-medium"
               />
             </FieldRow>
 
@@ -226,7 +226,7 @@ export const EpisodeDetailPanel = forwardRef<PanelHandle, Props>(
                     update("status", v as EpisodeStatus)
                   }
                 >
-                  <SelectTrigger className="h-11 bg-white/[0.03]">
+                  <SelectTrigger className="h-11 bg-foreground/[0.03]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -246,7 +246,7 @@ export const EpisodeDetailPanel = forwardRef<PanelHandle, Props>(
                     update("format", v === "__none__" ? "" : v)
                   }
                 >
-                  <SelectTrigger className="h-11 bg-white/[0.03]">
+                  <SelectTrigger className="h-11 bg-foreground/[0.03]">
                     <SelectValue placeholder="Choisis un format…" />
                   </SelectTrigger>
                   <SelectContent>
@@ -272,7 +272,7 @@ export const EpisodeDetailPanel = forwardRef<PanelHandle, Props>(
                   onChange={(e) =>
                     update("production_date", e.target.value || null)
                   }
-                  className="h-11 bg-white/[0.03]"
+                  className="h-11 bg-foreground/[0.03]"
                   aria-label="Date de tournage"
                 />
                 <Input
@@ -281,7 +281,7 @@ export const EpisodeDetailPanel = forwardRef<PanelHandle, Props>(
                   onChange={(e) =>
                     update("production_time", e.target.value || null)
                   }
-                  className="h-11 bg-white/[0.03]"
+                  className="h-11 bg-foreground/[0.03]"
                   aria-label="Heure de tournage"
                 />
                 <div className="relative">
@@ -297,7 +297,7 @@ export const EpisodeDetailPanel = forwardRef<PanelHandle, Props>(
                       )
                     }
                     placeholder="Durée"
-                    className="h-11 bg-white/[0.03] pr-12"
+                    className="h-11 bg-foreground/[0.03] pr-12"
                     aria-label="Durée en minutes"
                   />
                   <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground">
@@ -317,7 +317,7 @@ export const EpisodeDetailPanel = forwardRef<PanelHandle, Props>(
                 onChange={(e) =>
                   update("publication_date", e.target.value || null)
                 }
-                className="h-11 bg-white/[0.03] sm:max-w-xs"
+                className="h-11 bg-foreground/[0.03] sm:max-w-xs"
               />
             </FieldRow>
 
@@ -329,7 +329,7 @@ export const EpisodeDetailPanel = forwardRef<PanelHandle, Props>(
                 value={form.location ?? ""}
                 onChange={(e) => update("location", e.target.value)}
                 placeholder="Sainte-Anne · Plage des Salines"
-                className="h-11 bg-white/[0.03]"
+                className="h-11 bg-foreground/[0.03]"
               />
             </FieldRow>
 
@@ -372,7 +372,7 @@ export const EpisodeDetailPanel = forwardRef<PanelHandle, Props>(
                 onChange={(e) => update("description", e.target.value)}
                 rows={3}
                 placeholder="Sujet, angle, lieu, contexte…"
-                className="w-full rounded-lg border border-white/10 bg-white/[0.03] p-3 text-sm text-foreground placeholder:text-muted-foreground/40 focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="w-full rounded-lg border border-foreground/10 bg-foreground/[0.03] p-3 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
             </FieldRow>
 
@@ -385,13 +385,13 @@ export const EpisodeDetailPanel = forwardRef<PanelHandle, Props>(
                 onChange={(e) => update("notes", e.target.value)}
                 rows={5}
                 placeholder="Brief technique, contacts utiles, points d'attention…"
-                className="w-full rounded-lg border border-white/10 bg-white/[0.03] p-3 text-sm text-foreground placeholder:text-muted-foreground/40 focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="w-full rounded-lg border border-foreground/10 bg-foreground/[0.03] p-3 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
             </FieldRow>
           </div>
 
           {/* Sticky footer save bar */}
-          <div className="-mx-5 -mb-5 flex items-center justify-between gap-3 border-t border-white/10 bg-background/80 px-5 py-4 backdrop-blur-md md:-mx-7 md:-mb-7 md:px-7">
+          <div className="-mx-5 -mb-5 flex items-center justify-between gap-3 border-t border-foreground/10 bg-background/80 px-5 py-4 backdrop-blur-md md:-mx-7 md:-mb-7 md:px-7">
             <div className="text-xs text-muted-foreground">
               {dirty ? (
                 <span className="text-amber-400/90">
@@ -442,7 +442,7 @@ export const EpisodeDetailPanel = forwardRef<PanelHandle, Props>(
           open={pendingAction !== null}
           onOpenChange={(v) => !v && setPendingAction(null)}
         >
-          <DialogContent className="glass-panel border-white/10 sm:max-w-md">
+          <DialogContent className="glass-panel border-foreground/10 sm:max-w-md">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 font-heading text-2xl font-light">
                 <AlertTriangle className="h-5 w-5 text-amber-400" />
@@ -518,7 +518,7 @@ function DetailHeader({
       <button
         type="button"
         onClick={onClose}
-        className="rounded-md p-2 transition-colors hover:bg-white/[0.06] md:hidden"
+        className="rounded-md p-2 transition-colors hover:bg-foreground/[0.06] md:hidden"
         aria-label="Retour"
       >
         <ArrowLeft className="h-5 w-5" />
@@ -563,7 +563,7 @@ function DetailHeader({
         <button
           type="button"
           onClick={onToggleFullscreen}
-          className="hidden rounded-md p-2 transition-colors hover:bg-white/[0.06] md:inline-flex"
+          className="hidden rounded-md p-2 transition-colors hover:bg-foreground/[0.06] md:inline-flex"
           aria-label={fullscreen ? "Réduire" : "Agrandir"}
         >
           {fullscreen ? (
@@ -575,7 +575,7 @@ function DetailHeader({
         <button
           type="button"
           onClick={onClose}
-          className="hidden rounded-md p-2 transition-colors hover:bg-white/[0.06] md:inline-flex"
+          className="hidden rounded-md p-2 transition-colors hover:bg-foreground/[0.06] md:inline-flex"
           aria-label="Fermer"
         >
           <X className="h-4 w-4" />
@@ -647,7 +647,7 @@ function ChipsInput({
             }
           }}
           placeholder={placeholder}
-          className="h-11 bg-white/[0.03]"
+          className="h-11 bg-foreground/[0.03]"
         />
         <Button
           type="button"
@@ -664,13 +664,13 @@ function ChipsInput({
           {items.map((item, idx) => (
             <span
               key={`${item}-${idx}`}
-              className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] py-1 pl-3 pr-1 text-xs"
+              className="inline-flex items-center gap-1.5 rounded-full border border-foreground/10 bg-foreground/[0.04] py-1 pl-3 pr-1 text-xs"
             >
               {item}
               <button
                 type="button"
                 onClick={() => remove(idx)}
-                className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-white/[0.08] hover:text-foreground"
+                className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-foreground/[0.08] hover:text-foreground"
                 aria-label={`Retirer ${item}`}
               >
                 <X className="h-3 w-3" />

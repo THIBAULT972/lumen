@@ -198,7 +198,7 @@ export function ProjetWorkspace({
             // mobile : plein écran
             "fixed inset-0 z-40 overflow-y-auto bg-background",
             // desktop : fenêtre à droite
-            "md:left-auto md:right-0 md:top-0 md:h-screen md:border-l md:border-white/[0.08] md:shadow-[-24px_0_60px_-30px_oklch(0_0_0/0.8)]",
+            "md:left-auto md:right-0 md:top-0 md:h-screen md:border-l md:border-foreground/[0.08] md:shadow-[-24px_0_60px_-30px_oklch(0_0_0/0.8)]",
             // fullscreen : prend tout l'écran sur desktop
             fullscreen
               ? "md:left-0 md:right-0 md:w-full md:border-l-0"
@@ -218,8 +218,8 @@ export function ProjetWorkspace({
               aria-label="Redimensionner le panneau"
               role="separator"
             >
-              <div className="my-auto h-12 w-1 rounded-r-full bg-white/10 transition-colors group-hover/handle:bg-primary/40" />
-              <GripVertical className="pointer-events-none absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 text-white/30 opacity-0 transition-opacity group-hover/handle:opacity-100" />
+              <div className="my-auto h-12 w-1 rounded-r-full bg-foreground/10 transition-colors group-hover/handle:bg-primary/40" />
+              <GripVertical className="pointer-events-none absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 text-foreground/30 opacity-0 transition-opacity group-hover/handle:opacity-100" />
             </div>
           ) : null}
 
@@ -314,11 +314,11 @@ function EpisodeListItem({
         "group/item flex items-center gap-3 px-4 py-3 transition-colors",
         isSelected
           ? "bg-primary/10"
-          : "cursor-pointer hover:bg-white/[0.03]",
+          : "cursor-pointer hover:bg-foreground/[0.03]",
       )}
       onClick={() => onSelect(episode.id)}
     >
-      <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+      <span className="rounded-md border border-foreground/10 bg-foreground/[0.03] px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
         #{episode.order_index + 1}
       </span>
 
@@ -353,7 +353,7 @@ function EpisodeListItem({
             type="button"
             disabled={isFirst || pending}
             onClick={() => move("up")}
-            className="rounded-md p-1.5 transition-colors hover:bg-white/[0.06] disabled:opacity-30"
+            className="rounded-md p-1.5 transition-colors hover:bg-foreground/[0.06] disabled:opacity-30"
             aria-label="Monter"
           >
             <ArrowUp className="h-3.5 w-3.5" />
@@ -362,21 +362,21 @@ function EpisodeListItem({
             type="button"
             disabled={isLast || pending}
             onClick={() => move("down")}
-            className="rounded-md p-1.5 transition-colors hover:bg-white/[0.06] disabled:opacity-30"
+            className="rounded-md p-1.5 transition-colors hover:bg-foreground/[0.06] disabled:opacity-30"
             aria-label="Descendre"
           >
             <ArrowDown className="h-3.5 w-3.5" />
           </button>
           <DropdownMenu>
             <DropdownMenuTrigger
-              className="rounded-md p-1.5 transition-colors hover:bg-white/[0.06]"
+              className="rounded-md p-1.5 transition-colors hover:bg-foreground/[0.06]"
               aria-label="Actions"
             >
               <MoreHorizontal className="h-3.5 w-3.5" />
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
-              className="glass-panel border-white/10"
+              className="glass-panel border-foreground/10"
             >
               <DropdownMenuItem
                 variant="destructive"
@@ -429,7 +429,7 @@ function AddEpisodeDialog({
   }
 
   return (
-    <DialogContent className="glass-panel border-white/10 sm:max-w-md">
+    <DialogContent className="glass-panel border-foreground/10 sm:max-w-md">
       <DialogHeader>
         <DialogTitle className="font-heading text-2xl font-light">
           Nouvelle émission
@@ -450,7 +450,7 @@ function AddEpisodeDialog({
             autoFocus
             required
             placeholder="Ex: Épisode 4 — Sainte-Anne"
-            className="h-11 bg-white/[0.03]"
+            className="h-11 bg-foreground/[0.03]"
           />
         </div>
 
@@ -500,7 +500,7 @@ function DeleteEpisodeDialog({
   }
 
   return (
-    <DialogContent className="glass-panel border-white/10 sm:max-w-md">
+    <DialogContent className="glass-panel border-foreground/10 sm:max-w-md">
       <DialogHeader>
         <DialogTitle className="font-heading text-2xl font-light">
           Supprimer l'émission ?

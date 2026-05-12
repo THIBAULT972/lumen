@@ -88,7 +88,7 @@ export function ProjetsManager({
   return (
     <>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-1 rounded-full border border-white/10 bg-white/[0.02] p-1 text-xs">
+        <div className="flex gap-1 rounded-full border border-foreground/10 bg-foreground/[0.02] p-1 text-xs">
           <FilterPill
             href="/producteur/projets"
             active={!showArchived}
@@ -159,7 +159,7 @@ function FilterPill({
       href={href}
       className={
         active
-          ? "rounded-full bg-white/[0.06] px-3 py-1.5 font-medium text-foreground"
+          ? "rounded-full bg-foreground/[0.06] px-3 py-1.5 font-medium text-foreground"
           : "rounded-full px-3 py-1.5 text-muted-foreground transition-colors hover:text-foreground"
       }
     >
@@ -211,7 +211,7 @@ function ProjectCard({
     .filter((p): p is ProducteurOption => Boolean(p));
 
   return (
-    <div className="glass-panel relative rounded-2xl p-5 transition-all hover:bg-white/[0.03]">
+    <div className="glass-panel relative rounded-2xl p-5 transition-all hover:bg-foreground/[0.03]">
       <div className="flex items-start justify-between gap-3">
         <Link
           href={`/producteur/projets/${project.id}`}
@@ -250,7 +250,7 @@ function ProjectCard({
         <DropdownMenu>
           <DropdownMenuTrigger
             disabled={pending}
-            className="rounded-md p-2 transition-colors hover:bg-white/[0.06] disabled:opacity-50"
+            className="rounded-md p-2 transition-colors hover:bg-foreground/[0.06] disabled:opacity-50"
             aria-label="Actions"
           >
             {pending ? (
@@ -261,7 +261,7 @@ function ProjectCard({
           </DropdownMenuTrigger>
           <DropdownMenuContent
             align="end"
-            className="glass-panel border-white/10"
+            className="glass-panel border-foreground/10"
           >
             <DropdownMenuItem onClick={() => setEditOpen(true)}>
               <Pencil className="mr-2 h-4 w-4" />
@@ -340,7 +340,7 @@ function ProducteurChip({ producteur }: { producteur: ProducteurOption }) {
       .filter(Boolean)
       .join(" ") || producteur.email;
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[10px] text-muted-foreground">
+    <span className="inline-flex items-center gap-1 rounded-full border border-foreground/10 bg-foreground/[0.03] px-2 py-0.5 text-[10px] text-muted-foreground">
       <Crown className="h-2.5 w-2.5" />
       {label}
     </span>
@@ -410,7 +410,7 @@ function ProjectFormFields({
           required
           defaultValue={defaultName}
           placeholder="Ex: Histwa, Saison 2"
-          className="h-11 bg-white/[0.03]"
+          className="h-11 bg-foreground/[0.03]"
         />
       </div>
 
@@ -428,7 +428,7 @@ function ProjectFormFields({
             </button>
           </div>
           <Select value={clientId} onValueChange={setClientId}>
-            <SelectTrigger className="h-11 bg-white/[0.03]">
+            <SelectTrigger className="h-11 bg-foreground/[0.03]">
               <SelectValue placeholder="Sélectionne un client…" />
             </SelectTrigger>
             <SelectContent>
@@ -493,7 +493,7 @@ function ProjectFormFields({
           rows={3}
           defaultValue={defaultDescription}
           placeholder="Contexte, brief général, notes…"
-          className="w-full rounded-lg border border-white/10 bg-white/[0.03] p-3 text-sm text-foreground placeholder:text-muted-foreground/40 focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="w-full rounded-lg border border-foreground/10 bg-foreground/[0.03] p-3 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
       </div>
 
@@ -557,7 +557,7 @@ function AddProjectDialog({
   }
 
   return (
-    <DialogContent className="glass-panel max-h-[90vh] overflow-y-auto border-white/10 sm:max-w-lg">
+    <DialogContent className="glass-panel max-h-[90vh] overflow-y-auto border-foreground/10 sm:max-w-lg">
       <DialogHeader>
         <DialogTitle className="font-heading text-2xl font-light">
           Nouveau projet
@@ -648,7 +648,7 @@ function EditProjectDialog({
   }
 
   return (
-    <DialogContent className="glass-panel max-h-[90vh] overflow-y-auto border-white/10 sm:max-w-lg">
+    <DialogContent className="glass-panel max-h-[90vh] overflow-y-auto border-foreground/10 sm:max-w-lg">
       <DialogHeader>
         <DialogTitle className="font-heading text-2xl font-light">
           Modifier le projet
@@ -720,7 +720,7 @@ function DeleteProjectDialog({
   }
 
   return (
-    <DialogContent className="glass-panel border-white/10 sm:max-w-md">
+    <DialogContent className="glass-panel border-foreground/10 sm:max-w-md">
       <DialogHeader>
         <DialogTitle className="font-heading text-2xl font-light">
           Supprimer définitivement ?
@@ -741,7 +741,7 @@ function DeleteProjectDialog({
           id="confirm-del-project"
           value={confirmation}
           onChange={(e) => setConfirmation(e.target.value)}
-          className="h-11 bg-white/[0.03]"
+          className="h-11 bg-foreground/[0.03]"
           autoComplete="off"
           autoFocus
         />
@@ -802,7 +802,7 @@ function TypeChip({
       className={
         active
           ? "rounded-xl border border-primary/60 bg-primary/10 p-3 text-left transition-all"
-          : "rounded-xl border border-white/10 bg-white/[0.02] p-3 text-left transition-all hover:border-white/20 hover:bg-white/[0.04]"
+          : "rounded-xl border border-foreground/10 bg-foreground/[0.02] p-3 text-left transition-all hover:border-foreground/20 hover:bg-foreground/[0.04]"
       }
     >
       <div className="flex items-center gap-2 text-sm font-medium">
@@ -861,7 +861,7 @@ function NewClientInlineDialog({
 
   if (step.phase === "password") {
     return (
-      <DialogContent className="glass-panel border-white/10 sm:max-w-md">
+      <DialogContent className="glass-panel border-foreground/10 sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="font-heading text-2xl font-light">
             Client créé
@@ -872,7 +872,7 @@ function NewClientInlineDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/40 p-3">
+        <div className="flex items-center gap-2 rounded-xl border border-foreground/10 bg-black/40 p-3">
           <code className="flex-1 font-mono text-base text-foreground select-all">
             {step.password}
           </code>
@@ -906,7 +906,7 @@ function NewClientInlineDialog({
   }
 
   return (
-    <DialogContent className="glass-panel border-white/10 sm:max-w-md">
+    <DialogContent className="glass-panel border-foreground/10 sm:max-w-md">
       <DialogHeader>
         <DialogTitle className="font-heading text-2xl font-light">
           Nouveau client
@@ -924,7 +924,7 @@ function NewClientInlineDialog({
               id="new-client-firstname"
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
-              className="h-11 bg-white/[0.03]"
+              className="h-11 bg-foreground/[0.03]"
               autoComplete="off"
               autoFocus
             />
@@ -935,7 +935,7 @@ function NewClientInlineDialog({
               id="new-client-lastname"
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
-              className="h-11 bg-white/[0.03]"
+              className="h-11 bg-foreground/[0.03]"
               autoComplete="off"
             />
           </div>
@@ -949,7 +949,7 @@ function NewClientInlineDialog({
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="contact@brand.com"
-            className="h-11 bg-white/[0.03]"
+            className="h-11 bg-foreground/[0.03]"
             autoComplete="off"
           />
         </div>

@@ -127,7 +127,7 @@ function FormField({
         autoComplete={autoComplete}
         placeholder={placeholder}
         required={required}
-        className="h-12 rounded-xl border-white/10 bg-white/[0.03] text-base text-foreground placeholder:text-muted-foreground/40 focus-visible:border-primary/60 focus-visible:bg-white/[0.05] focus-visible:ring-2 focus-visible:ring-primary/30"
+        className="h-12 rounded-xl border-foreground/10 bg-foreground/[0.03] text-base text-foreground placeholder:text-muted-foreground/60 focus-visible:border-primary/60 focus-visible:bg-foreground/[0.05] focus-visible:ring-2 focus-visible:ring-primary/30"
       />
     </motion.div>
   );

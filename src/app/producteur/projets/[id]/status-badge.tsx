@@ -11,7 +11,7 @@ const LABELS: Record<EpisodeStatus, string> = {
 };
 
 const STYLES: Record<EpisodeStatus, string> = {
-  idea: "border-white/15 bg-white/[0.04] text-muted-foreground",
+  idea: "border-foreground/15 bg-foreground/[0.04] text-muted-foreground",
   planning:
     "border-[oklch(0.7_0.18_200/0.5)] bg-[oklch(0.5_0.18_200/0.15)] text-[oklch(0.85_0.15_200)]",
   shooting:

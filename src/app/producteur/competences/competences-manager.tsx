@@ -67,7 +67,7 @@ export function CompetencesManager({ skills }: { skills: SkillWithUsage[] }) {
       <div className="glass-panel overflow-hidden rounded-2xl">
         <Table>
           <TableHeader>
-            <TableRow className="border-white/[0.06] hover:bg-transparent">
+            <TableRow className="border-foreground/[0.06] hover:bg-transparent">
               <TableHead>Nom</TableHead>
               <TableHead>Prestataires</TableHead>
               <TableHead>Missions</TableHead>
@@ -76,7 +76,7 @@ export function CompetencesManager({ skills }: { skills: SkillWithUsage[] }) {
           </TableHeader>
           <TableBody>
             {skills.length === 0 ? (
-              <TableRow className="border-white/[0.06]">
+              <TableRow className="border-foreground/[0.06]">
                 <TableCell
                   colSpan={4}
                   className="py-12 text-center text-muted-foreground"
@@ -107,7 +107,7 @@ function AddSkillDialog({ onSuccess }: { onSuccess: () => void }) {
   }, null);
 
   return (
-    <DialogContent className="glass-panel border-white/10 sm:max-w-md">
+    <DialogContent className="glass-panel border-foreground/10 sm:max-w-md">
       <DialogHeader>
         <DialogTitle className="font-heading text-2xl font-light">
           Nouvelle compétence
@@ -126,7 +126,7 @@ function AddSkillDialog({ onSuccess }: { onSuccess: () => void }) {
             autoFocus
             required
             maxLength={60}
-            className="h-11 bg-white/[0.03]"
+            className="h-11 bg-foreground/[0.03]"
           />
         </div>
 
@@ -159,7 +159,7 @@ function SkillRow({ skill }: { skill: SkillWithUsage }) {
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   return (
-    <TableRow className="border-white/[0.06] hover:bg-white/[0.02]">
+    <TableRow className="border-foreground/[0.06] hover:bg-foreground/[0.02]">
       <TableCell className="font-medium">{skill.name}</TableCell>
       <TableCell>
         {skill.prestataire_count > 0 ? (
@@ -178,12 +178,12 @@ function SkillRow({ skill }: { skill: SkillWithUsage }) {
       <TableCell>
         <DropdownMenu>
           <DropdownMenuTrigger
-            className="rounded-md p-2 transition-colors hover:bg-white/[0.06]"
+            className="rounded-md p-2 transition-colors hover:bg-foreground/[0.06]"
             aria-label="Actions"
           >
             <MoreHorizontal className="h-4 w-4" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="glass-panel border-white/10">
+          <DropdownMenuContent align="end" className="glass-panel border-foreground/10">
             <DropdownMenuItem onClick={() => setRenameOpen(true)}>
               <Pencil className="mr-2 h-4 w-4" />
               Renommer
@@ -238,7 +238,7 @@ function RenameDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="glass-panel border-white/10 sm:max-w-md">
+      <DialogContent className="glass-panel border-foreground/10 sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="font-heading text-2xl font-light">
             Renommer la compétence
@@ -257,7 +257,7 @@ function RenameDialog({
               autoFocus
               required
               maxLength={60}
-              className="h-11 bg-white/[0.03]"
+              className="h-11 bg-foreground/[0.03]"
             />
           </div>
           {error ? (
@@ -307,7 +307,7 @@ function DeleteDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="glass-panel border-white/10 sm:max-w-md">
+      <DialogContent className="glass-panel border-foreground/10 sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="font-heading text-2xl font-light">
             Supprimer « {skill.name} » ?

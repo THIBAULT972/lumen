@@ -41,7 +41,7 @@ export function ProducteurNav() {
               "inline-flex items-center gap-2 border-b-2 px-4 py-3 text-sm transition-colors",
               active
                 ? "border-primary text-foreground"
-                : "border-transparent text-muted-foreground hover:border-white/20 hover:text-foreground",
+                : "border-transparent text-muted-foreground hover:border-foreground/30 hover:text-foreground",
             )}
           >
             <Icon className="h-4 w-4" />

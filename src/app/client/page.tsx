@@ -97,7 +97,7 @@ export default async function ClientPage() {
                   {p.episodes.map((ep) => (
                     <div
                       key={ep.id}
-                      className="flex flex-wrap items-center gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-sm"
+                      className="flex flex-wrap items-center gap-3 rounded-lg border border-foreground/[0.06] bg-foreground/[0.02] px-3 py-2 text-sm"
                     >
                       <span className="font-medium">{ep.name}</span>
                       {ep.production_date ? (

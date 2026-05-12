@@ -180,7 +180,7 @@ function TeamSection({
       <div className="glass-panel overflow-hidden rounded-2xl">
         <Table>
           <TableHeader>
-            <TableRow className="border-white/[0.06] hover:bg-transparent">
+            <TableRow className="border-foreground/[0.06] hover:bg-transparent">
               <TableHead>Nom</TableHead>
               <TableHead>Email</TableHead>
               {showSkills ? <TableHead>Compétences</TableHead> : null}
@@ -190,7 +190,7 @@ function TeamSection({
           </TableHeader>
           <TableBody>
             {members.length === 0 ? (
-              <TableRow className="border-white/[0.06]">
+              <TableRow className="border-foreground/[0.06]">
                 <TableCell
                   colSpan={showSkills ? 5 : 4}
                   className="py-12 text-center text-muted-foreground"
@@ -258,7 +258,7 @@ function MemberRow({
   }
 
   return (
-    <TableRow className="border-white/[0.06] hover:bg-white/[0.02]">
+    <TableRow className="border-foreground/[0.06] hover:bg-foreground/[0.02]">
       <TableCell className="font-medium">
         {displayName}
         {isBanned ? (
@@ -289,14 +289,14 @@ function MemberRow({
       <TableCell>
         <DropdownMenu>
           <DropdownMenuTrigger
-            className="rounded-md p-2 transition-colors hover:bg-white/[0.06]"
+            className="rounded-md p-2 transition-colors hover:bg-foreground/[0.06]"
             aria-label="Actions"
           >
             <MoreHorizontal className="h-4 w-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent
             align="end"
-            className="glass-panel border-white/10"
+            className="glass-panel border-foreground/10"
           >
             <DropdownMenuItem onClick={() => setEditOpen(true)}>
               <Pencil className="mr-2 h-4 w-4" />
@@ -384,7 +384,7 @@ function AddMemberDialog({
   }
 
   return (
-    <DialogContent className="glass-panel border-white/10 sm:max-w-lg">
+    <DialogContent className="glass-panel border-foreground/10 sm:max-w-lg">
       <DialogHeader>
         <DialogTitle className="font-heading text-2xl font-light">
           Nouveau membre
@@ -402,7 +402,7 @@ function AddMemberDialog({
               id="first_name"
               name="first_name"
               autoComplete="off"
-              className="h-11 bg-white/[0.03]"
+              className="h-11 bg-foreground/[0.03]"
             />
           </div>
           <div className="space-y-2">
@@ -411,7 +411,7 @@ function AddMemberDialog({
               id="last_name"
               name="last_name"
               autoComplete="off"
-              className="h-11 bg-white/[0.03]"
+              className="h-11 bg-foreground/[0.03]"
             />
           </div>
         </div>
@@ -425,7 +425,7 @@ function AddMemberDialog({
             required
             autoComplete="off"
             placeholder="prenom@exemple.com"
-            className="h-11 bg-white/[0.03]"
+            className="h-11 bg-foreground/[0.03]"
           />
         </div>
 
@@ -437,7 +437,7 @@ function AddMemberDialog({
               setRole(v as "producteur" | "prestataire" | "client")
             }
           >
-            <SelectTrigger className="h-11 bg-white/[0.03]">
+            <SelectTrigger className="h-11 bg-foreground/[0.03]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -546,7 +546,7 @@ function EditMemberDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="glass-panel border-white/10 sm:max-w-lg">
+      <DialogContent className="glass-panel border-foreground/10 sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="font-heading text-2xl font-light">
             Modifier le membre
@@ -564,7 +564,7 @@ function EditMemberDialog({
                 id="edit_first_name"
                 name="first_name"
                 defaultValue={member.first_name ?? ""}
-                className="h-11 bg-white/[0.03]"
+                className="h-11 bg-foreground/[0.03]"
               />
             </div>
             <div className="space-y-2">
@@ -573,7 +573,7 @@ function EditMemberDialog({
                 id="edit_last_name"
                 name="last_name"
                 defaultValue={member.last_name ?? ""}
-                className="h-11 bg-white/[0.03]"
+                className="h-11 bg-foreground/[0.03]"
               />
             </div>
           </div>
@@ -664,7 +664,7 @@ function DeleteMemberDialog({
         onOpenChange(v);
       }}
     >
-      <DialogContent className="glass-panel border-white/10 sm:max-w-md">
+      <DialogContent className="glass-panel border-foreground/10 sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="font-heading text-2xl font-light">
             Supprimer ce membre ?
@@ -686,7 +686,7 @@ function DeleteMemberDialog({
             id="confirm"
             value={confirmation}
             onChange={(e) => setConfirmation(e.target.value)}
-            className="h-11 bg-white/[0.03]"
+            className="h-11 bg-foreground/[0.03]"
             autoComplete="off"
             autoFocus
           />
@@ -771,7 +771,7 @@ function PasswordDialog({
 
   return (
     <Dialog open={Boolean(generated)} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="glass-panel border-white/10 sm:max-w-md">
+      <DialogContent className="glass-panel border-foreground/10 sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="font-heading text-2xl font-light">
             {title}
@@ -783,7 +783,7 @@ function PasswordDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/40 p-3">
+        <div className="flex items-center gap-2 rounded-xl border border-foreground/10 bg-black/40 p-3">
           <code className="flex-1 font-mono text-base text-foreground select-all">
             {generated.password}
           </code>

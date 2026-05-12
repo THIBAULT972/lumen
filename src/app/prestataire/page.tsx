@@ -100,10 +100,10 @@ function PlaceholderCard({
 }) {
   return (
     <div className="glass-panel relative overflow-hidden rounded-2xl p-6">
-      <div className="absolute right-4 top-4 rounded-full border border-white/10 bg-white/[0.03] px-2 py-0.5 text-[9px] uppercase tracking-[0.2em] text-muted-foreground">
+      <div className="absolute right-4 top-4 rounded-full border border-foreground/10 bg-foreground/[0.03] px-2 py-0.5 text-[9px] uppercase tracking-[0.2em] text-muted-foreground">
         {eta}
       </div>
-      <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03]">
+      <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-foreground/10 bg-foreground/[0.03]">
         <Icon className="h-4 w-4 text-muted-foreground" />
       </div>
       <h3 className="mt-5 font-heading text-lg font-medium">{title}</h3>

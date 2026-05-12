@@ -124,7 +124,7 @@ export function PlatformsPicker({
             <button
               type="button"
               onClick={() => remove(name)}
-              className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-white/[0.08] hover:text-foreground"
+              className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-foreground/[0.08] hover:text-foreground"
               aria-label={`Retirer ${name}`}
             >
               <X className="h-3 w-3" />
@@ -138,7 +138,7 @@ export function PlatformsPicker({
             "inline-flex items-center gap-1 rounded-full border border-dashed py-1 pl-2 pr-3 text-xs transition-colors",
             open
               ? "border-primary/50 bg-primary/5 text-foreground"
-              : "border-white/15 bg-transparent text-muted-foreground hover:border-white/30 hover:text-foreground",
+              : "border-foreground/15 bg-transparent text-muted-foreground hover:border-foreground/30 hover:text-foreground",
           )}
         >
           <Plus className="h-3 w-3" />
@@ -148,7 +148,7 @@ export function PlatformsPicker({
 
       {/* Picker popover */}
       {open ? (
-        <div className="glass-panel relative z-10 rounded-xl border border-white/10 p-2">
+        <div className="glass-panel relative z-10 rounded-xl border border-foreground/10 p-2">
           <div className="relative mb-2">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -156,7 +156,7 @@ export function PlatformsPicker({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Rechercher ou créer…"
-              className="h-10 bg-white/[0.03] pl-9"
+              className="h-10 bg-foreground/[0.03] pl-9"
               onKeyDown={(e) => {
                 if (e.key === "Escape") close();
                 if (e.key === "Enter") {
@@ -189,7 +189,7 @@ export function PlatformsPicker({
                         "flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors",
                         isSel
                           ? "bg-primary/10 text-foreground"
-                          : "hover:bg-white/[0.04]",
+                          : "hover:bg-foreground/[0.04]",
                       )}
                     >
                       <span
@@ -197,7 +197,7 @@ export function PlatformsPicker({
                           "flex h-4 w-4 items-center justify-center rounded-sm border",
                           isSel
                             ? "border-primary bg-primary text-primary-foreground"
-                            : "border-white/20",
+                            : "border-foreground/20",
                         )}
                       >
                         {isSel ? <Check className="h-3 w-3" /> : null}
@@ -211,7 +211,7 @@ export function PlatformsPicker({
           </ul>
 
           {trimmedQuery && !exactMatchExists ? (
-            <div className="mt-1 border-t border-white/[0.06] pt-2">
+            <div className="mt-1 border-t border-foreground/[0.06] pt-2">
               <Button
                 type="button"
                 variant="ghost"
