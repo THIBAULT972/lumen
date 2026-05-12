@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
 import { getProducteur } from "@/lib/auth/guard";
 import { generatePassword } from "@/lib/auth/password";
 
@@ -36,8 +35,8 @@ export async function createMember(
   if (!EMAIL_RE.test(email)) {
     return { ok: false, error: "Email invalide." };
   }
-  if (role !== "prestataire" && role !== "client") {
-    return { ok: false, error: "Rôle invalide. Choisis prestataire ou client." };
+  if (role !== "prestataire" && role !== "client" && role !== "producteur") {
+    return { ok: false, error: "Rôle invalide." };
   }
 
   const admin = createAdminClient();
@@ -148,20 +147,6 @@ export async function deleteMember(
 
   if (me.id === userId) {
     return { ok: false, error: "Tu ne peux pas te supprimer toi-même." };
-  }
-
-  const supabase = await createClient();
-  const { data: target } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", userId)
-    .single();
-
-  if (target?.role === "producteur") {
-    return {
-      ok: false,
-      error: "Suppression d'un autre producteur non autorisée pour l'instant.",
-    };
   }
 
   const admin = createAdminClient();

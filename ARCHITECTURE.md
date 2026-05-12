@@ -122,7 +122,8 @@ prod/
 | `prestataire_profiles` | Prestataire | Données sensibles : RIB, contact urgence — table séparée pour RLS stricte |
 | `skills` | Producteur | Liste éditable (CRUD producteur). Seed : 7 skills par défaut |
 | `user_skills` | Producteur | M:N entre profiles et skills |
-| `projects` | Producteur | Dossier client (1 client_id par projet) |
+| `projects` | Producteur | Dossier (1 client_id par projet, nullable). Visibilité contrôlée par `project_producteurs` |
+| `project_producteurs` | M:N | Lie un projet aux N producteurs qui le gèrent. **Filtre principal** des projets côté producteur |
 | `episodes` | Producteur | N émissions par projet, avec `production_date` + `publication_date` |
 | `missions` | Producteur (CRUD) + prestataires (accept/cancel) | Cœur métier, voir §5 |
 | `files` | Mixte (cf. RLS) | Path Supabase Storage tracké ici. `target` enum définit le contexte |
@@ -130,7 +131,7 @@ prod/
 | `notifications` | Système | In-app uniquement pour l'instant |
 
 ### RLS — modèle mental
-- Le **producteur** voit tout, peut tout. Helper SQL `public.is_producteur()` utilisé partout.
+- Le **producteur** voit tout, peut tout — **sauf qu'un projet n'est visible que pour les producteurs qui y sont explicitement assignés** (`project_producteurs`). Helper SQL `public.is_producteur()` pour vérifier le rôle, `public.is_project_producteur(p_id)` pour vérifier l'assignation projet.
 - Le **prestataire** voit :
   - son propre `profile` + `prestataire_profile`,
   - les `skills` (toute la liste),
@@ -146,10 +147,11 @@ prod/
   - les fichiers de ses projets ou de son hub (`destination_user_id = lui`),
   - ses notifications.
 
-### Helpers SQL (cf. `db/schema.sql`)
+### Helpers SQL (cf. `db/schema.sql` + migrations)
 - `is_producteur()` → bool
 - `current_user_role()` → user_role
 - `is_banned()` → bool (utilisé par RLS missions broadcast)
+- `is_project_producteur(p_id uuid)` → bool (depuis migration 002)
 - Trigger `tg_set_updated_at()` attaché à toutes les tables avec `updated_at`.
 
 ### Permissions et grants
@@ -233,11 +235,13 @@ Projet ──┬──> Émission 1 ──┬──> Mission 1 (droniste, 15/07,
 
 Réinitialisables via `npm run seed` (idempotent).
 
-| Rôle | Email | Mot de passe |
-|------|-------|-------------|
-| Producteur | `producteur@lumen.studio` | `Lumen2026!` |
-| Prestataire | `prestataire@lumen.studio` | `Lumen2026!` (skills : Cameraman + Droniste) |
-| Client | `client@lumen.studio` | `Lumen2026!` |
+| Rôle | Email | Mot de passe | Notes |
+|------|-------|-------------|-------|
+| Producteur | `producteur@lumen.studio` | `Lumen2026!` | Thibault LEPINE |
+| Producteur | `meghane@lumen.studio` | `Lumen2026!` | Meghane BEUSE |
+| Producteur | `anthony@lumen.studio` | `Lumen2026!` | Anthony DOUMITH |
+| Prestataire | `prestataire@lumen.studio` | `Lumen2026!` | skills : Cameraman + Droniste |
+| Client | `client@lumen.studio` | `Lumen2026!` | — |
 
 ---
 

@@ -18,6 +18,7 @@ import {
   Check,
   Users,
   UserCircle,
+  Crown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,10 +72,12 @@ type GeneratedPassword = {
 };
 
 export function EquipeManager({
+  producteurs,
   prestataires,
   clients,
   skills,
 }: {
+  producteurs: Member[];
   prestataires: Member[];
   clients: Member[];
   skills: Skill[];
@@ -86,6 +89,7 @@ export function EquipeManager({
     <>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
+          {producteurs.length} producteur{producteurs.length > 1 ? "s" : ""} ·{" "}
           {prestataires.length} prestataire{prestataires.length > 1 ? "s" : ""}{" "}
           · {clients.length} client{clients.length > 1 ? "s" : ""}
         </p>
@@ -108,13 +112,24 @@ export function EquipeManager({
       </div>
 
       <TeamSection
-        icon={<Users className="h-4 w-4" />}
-        title="Prestataires"
-        members={prestataires}
+        icon={<Crown className="h-4 w-4" />}
+        title="Producteurs"
+        members={producteurs}
         skills={skills}
-        showSkills
+        showSkills={false}
         onPasswordRegenerated={setGenerated}
       />
+
+      <div className="mt-10">
+        <TeamSection
+          icon={<Users className="h-4 w-4" />}
+          title="Prestataires"
+          members={prestataires}
+          skills={skills}
+          showSkills
+          onPasswordRegenerated={setGenerated}
+        />
+      </div>
 
       <div className="mt-10">
         <TeamSection
@@ -331,7 +346,9 @@ function AddMemberDialog({
   skills: Skill[];
   onSuccess: (g: GeneratedPassword) => void;
 }) {
-  const [role, setRole] = useState<"prestataire" | "client">("prestataire");
+  const [role, setRole] = useState<"producteur" | "prestataire" | "client">(
+    "prestataire",
+  );
   const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set());
 
   const [state, formAction, pending] = useActionState<
@@ -416,16 +433,25 @@ function AddMemberDialog({
           <Label>Rôle</Label>
           <Select
             value={role}
-            onValueChange={(v) => setRole(v as "prestataire" | "client")}
+            onValueChange={(v) =>
+              setRole(v as "producteur" | "prestataire" | "client")
+            }
           >
             <SelectTrigger className="h-11 bg-white/[0.03]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="producteur">Producteur (admin)</SelectItem>
               <SelectItem value="prestataire">Prestataire</SelectItem>
               <SelectItem value="client">Client</SelectItem>
             </SelectContent>
           </Select>
+          {role === "producteur" ? (
+            <p className="text-[11px] text-muted-foreground">
+              ⚠ Accès admin total : peut créer/supprimer des membres, des
+              projets, des missions.
+            </p>
+          ) : null}
         </div>
 
         {role === "prestataire" ? (

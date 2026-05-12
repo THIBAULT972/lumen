@@ -3,6 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getProducteur } from "@/lib/auth/guard";
+import { generatePassword } from "@/lib/auth/password";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type Result<T = void> =
   | ({ ok: true } & (T extends void ? object : T))
@@ -25,6 +28,10 @@ export async function createProject(
   const description = String(formData.get("description") ?? "").trim();
   const kind = String(formData.get("kind") ?? ""); // "client" | "media"
   const clientIdRaw = String(formData.get("client_id") ?? "").trim();
+  const producteurIds = formData
+    .getAll("producteur_ids")
+    .map(String)
+    .filter(Boolean);
 
   if (!name) return { ok: false, error: "Nom requis." };
   if (kind !== "client" && kind !== "media") {
@@ -32,6 +39,12 @@ export async function createProject(
   }
   if (kind === "client" && !clientIdRaw) {
     return { ok: false, error: "Sélectionne le client associé." };
+  }
+  if (producteurIds.length === 0) {
+    return {
+      ok: false,
+      error: "Sélectionne au moins un producteur gestionnaire.",
+    };
   }
 
   const admin = createAdminClient();
@@ -48,6 +61,21 @@ export async function createProject(
 
   if (error || !data) {
     return { ok: false, error: error?.message ?? "Erreur de création." };
+  }
+
+  const { error: ppErr } = await admin.from("project_producteurs").insert(
+    producteurIds.map((uid) => ({
+      project_id: data.id,
+      user_id: uid,
+    })),
+  );
+  if (ppErr) {
+    // Rollback the project so we don't leave it orphan/invisible.
+    await admin.from("projects").delete().eq("id", data.id);
+    return {
+      ok: false,
+      error: `Erreur d'assignation producteurs : ${ppErr.message}`,
+    };
   }
 
   revalidatePath("/producteur/projets");
@@ -69,6 +97,10 @@ export async function updateProject(
   const description = String(formData.get("description") ?? "").trim();
   const kind = String(formData.get("kind") ?? "");
   const clientIdRaw = String(formData.get("client_id") ?? "").trim();
+  const producteurIds = formData
+    .getAll("producteur_ids")
+    .map(String)
+    .filter(Boolean);
 
   if (!name) return { ok: false, error: "Nom requis." };
   if (kind !== "client" && kind !== "media") {
@@ -76,6 +108,12 @@ export async function updateProject(
   }
   if (kind === "client" && !clientIdRaw) {
     return { ok: false, error: "Sélectionne le client associé." };
+  }
+  if (producteurIds.length === 0) {
+    return {
+      ok: false,
+      error: "Sélectionne au moins un producteur gestionnaire.",
+    };
   }
 
   const admin = createAdminClient();
@@ -89,6 +127,16 @@ export async function updateProject(
     .eq("id", projectId);
 
   if (error) return { ok: false, error: error.message };
+
+  // Sync project_producteurs: drop everything, re-insert the chosen set.
+  await admin
+    .from("project_producteurs")
+    .delete()
+    .eq("project_id", projectId);
+  const { error: ppErr } = await admin
+    .from("project_producteurs")
+    .insert(producteurIds.map((uid) => ({ project_id: projectId, user_id: uid })));
+  if (ppErr) return { ok: false, error: ppErr.message };
 
   revalidatePath("/producteur/projets");
   revalidatePath(`/producteur/projets/${projectId}`);
@@ -145,6 +193,92 @@ export async function deleteProject(projectId: string): Promise<Result> {
   revalidatePath("/producteur");
   return { ok: true };
 }
+
+// ============================================================================
+// INLINE CLIENT CREATION — used from the "+ Nouveau client" button inside
+// the project creation modal. Stays light: only fields needed to enable the
+// link, plus the one-shot password.
+// ============================================================================
+
+export type CreateClientInlineResult =
+  | {
+      ok: true;
+      client: {
+        id: string;
+        email: string;
+        first_name: string | null;
+        last_name: string | null;
+      };
+      password: string;
+    }
+  | { ok: false; error: string };
+
+export async function createClientInline(input: {
+  email: string;
+  firstName: string;
+  lastName: string;
+}): Promise<CreateClientInlineResult> {
+  const guard = await getProducteur();
+  if (!guard.ok) return guard;
+
+  const email = input.email.trim().toLowerCase();
+  const firstName = input.firstName.trim();
+  const lastName = input.lastName.trim();
+
+  if (!EMAIL_RE.test(email)) {
+    return { ok: false, error: "Email invalide." };
+  }
+
+  const admin = createAdminClient();
+  const password = generatePassword();
+
+  const { data: authData, error: authErr } = await admin.auth.admin.createUser(
+    {
+      email,
+      password,
+      email_confirm: true,
+    },
+  );
+  if (authErr || !authData.user) {
+    return {
+      ok: false,
+      error:
+        authErr?.message?.includes("already") || authErr?.code === "email_exists"
+          ? "Cet email est déjà utilisé."
+          : authErr?.message || "Erreur lors de la création.",
+    };
+  }
+
+  const userId = authData.user.id;
+
+  const { error: profileErr } = await admin.from("profiles").insert({
+    id: userId,
+    role: "client",
+    email,
+    first_name: firstName || null,
+    last_name: lastName || null,
+    created_by: guard.user.id,
+  });
+  if (profileErr) {
+    await admin.auth.admin.deleteUser(userId);
+    return { ok: false, error: profileErr.message };
+  }
+
+  revalidatePath("/producteur/equipe");
+  revalidatePath("/producteur/projets");
+
+  return {
+    ok: true,
+    client: {
+      id: userId,
+      email,
+      first_name: firstName || null,
+      last_name: lastName || null,
+    },
+    password,
+  };
+}
+
 
 // ============================================================================
 // EPISODES

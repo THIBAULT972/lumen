@@ -32,7 +32,21 @@ const ACCOUNTS = [
     email: "producteur@lumen.studio",
     role: "producteur",
     first_name: "Thibault",
-    last_name: "Producteur",
+    last_name: "LEPINE",
+    skills: [],
+  },
+  {
+    email: "meghane@lumen.studio",
+    role: "producteur",
+    first_name: "Meghane",
+    last_name: "BEUSE",
+    skills: [],
+  },
+  {
+    email: "anthony@lumen.studio",
+    role: "producteur",
+    first_name: "Anthony",
+    last_name: "DOUMITH",
     skills: [],
   },
   {
@@ -116,6 +130,36 @@ async function upsertAccount(account) {
   }
 }
 
+async function backfillProjectProducteurs() {
+  // Assign every producteur to every existing project. Idempotent.
+  // Migration 002 already does this for projects that existed at migration
+  // time; this catches the case where a new producteur is added later.
+  const { data: producteurs } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("role", "producteur");
+  const { data: projects } = await supabase.from("projects").select("id");
+
+  if (!producteurs?.length || !projects?.length) return;
+
+  const links = producteurs.flatMap((prod) =>
+    projects.map((p) => ({ project_id: p.id, user_id: prod.id })),
+  );
+
+  const { error } = await supabase
+    .from("project_producteurs")
+    .upsert(links, { onConflict: "project_id,user_id" });
+
+  if (error && !error.message.includes("does not exist")) {
+    // Ignore "table doesn't exist" — migration 002 may not be applied yet.
+    console.warn("backfill project_producteurs:", error.message);
+  } else if (!error) {
+    console.log(
+      `✓ project_producteurs backfilled (${links.length} links).`,
+    );
+  }
+}
+
 async function main() {
   console.log("→ LUMEN seed starting…\n");
 
@@ -123,6 +167,9 @@ async function main() {
     await upsertAccount(account);
     console.log("");
   }
+
+  await backfillProjectProducteurs();
+  console.log("");
 
   console.log("✓ Seed complete.\n");
   console.log("──────────────────────────────────────────────");

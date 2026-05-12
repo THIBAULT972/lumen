@@ -22,7 +22,7 @@ export default async function EquipePage() {
       .select(
         "id, email, role, first_name, last_name, created_at, banned_until",
       )
-      .in("role", ["prestataire", "client"])
+      .in("role", ["producteur", "prestataire", "client"])
       .order("created_at", { ascending: false }),
     supabase.from("user_skills").select("user_id, skill_id"),
     supabase.from("skills").select("id, name").order("name"),
@@ -44,6 +44,9 @@ export default async function EquipePage() {
       .map((us) => us.skill_id),
   });
 
+  const producteurs = profiles
+    .filter((p) => p.role === "producteur")
+    .map(enrichMember);
   const prestataires = profiles
     .filter((p) => p.role === "prestataire")
     .map(enrichMember);
@@ -68,6 +71,7 @@ export default async function EquipePage() {
       </section>
 
       <EquipeManager
+        producteurs={producteurs}
         prestataires={prestataires}
         clients={clients}
         skills={skills}
