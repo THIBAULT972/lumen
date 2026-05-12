@@ -124,7 +124,8 @@ prod/
 | `user_skills` | Producteur | M:N entre profiles et skills |
 | `projects` | Producteur | Dossier (1 client_id par projet, nullable). Visibilité contrôlée par `project_producteurs` |
 | `project_producteurs` | M:N | Lie un projet aux N producteurs qui le gèrent. **Filtre principal** des projets côté producteur |
-| `episodes` | Producteur | N émissions par projet. Champs prod enrichis : `status` (workflow enum), `format`, `production_date` + `production_time` + `duration_minutes`, `publication_date`, `location`, `guests` (jsonb), `equipment` (jsonb), `platform`, `notes` |
+| `episodes` | Producteur | N émissions par projet. Champs prod enrichis : `status` (workflow enum), `format`, `production_date` + `production_time` + `duration_minutes`, `publication_date`, `location`, `guests` (jsonb), `equipment` (jsonb), `platforms` (jsonb array of strings), `notes` |
+| `platforms` | Producteur | Référentiel global des plateformes de diffusion (YouTube, TF1, …). CRUDable. Episodes les référencent par nom dans le jsonb `platforms` |
 | `missions` | Producteur (CRUD) + prestataires (accept/cancel) | Cœur métier, voir §5 |
 | `files` | Mixte (cf. RLS) | Path Supabase Storage tracké ici. `target` enum définit le contexte |
 | `text_documents` | Producteur (CRUD) | Stocke JSON Tiptap. Édition temps réel = post-MVP |

@@ -23,7 +23,7 @@ export type EpisodePayload = {
   location: string | null;
   guests: string[];
   equipment: string[];
-  platform: string | null;
+  platforms: string[];
   notes: string | null;
   description: string | null;
 };

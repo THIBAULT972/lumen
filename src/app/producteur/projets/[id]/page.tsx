@@ -20,10 +20,12 @@ export type Episode = {
   location: string | null;
   guests: string[];
   equipment: string[];
-  platform: string | null;
+  platforms: string[];
   notes: string | null;
   mission_count: number;
 };
+
+export type Platform = { id: string; name: string };
 
 export default async function ProjetDetailPage({
   params,
@@ -33,30 +35,36 @@ export default async function ProjetDetailPage({
   const { id } = await params;
   const supabase = await createClient();
 
-  const [projectRes, episodesRes, missionsRes, clientsRes] = await Promise.all([
-    supabase
-      .from("projects")
-      .select("id, name, description, client_id, archived_at")
-      .eq("id", id)
-      .maybeSingle(),
-    supabase
-      .from("episodes")
-      .select(
-        "id, name, description, order_index, status, format, production_date, production_time, duration_minutes, publication_date, location, guests, equipment, platform, notes",
-      )
-      .eq("project_id", id)
-      .order("order_index", { ascending: true }),
-    supabase.from("missions").select("id, episode_id"),
-    supabase
-      .from("profiles")
-      .select("id, email, first_name, last_name")
-      .eq("role", "client"),
-  ]);
+  const [projectRes, episodesRes, missionsRes, clientsRes, platformsRes] =
+    await Promise.all([
+      supabase
+        .from("projects")
+        .select("id, name, description, client_id, archived_at")
+        .eq("id", id)
+        .maybeSingle(),
+      supabase
+        .from("episodes")
+        .select(
+          "id, name, description, order_index, status, format, production_date, production_time, duration_minutes, publication_date, location, guests, equipment, platforms, notes",
+        )
+        .eq("project_id", id)
+        .order("order_index", { ascending: true }),
+      supabase.from("missions").select("id, episode_id"),
+      supabase
+        .from("profiles")
+        .select("id, email, first_name, last_name")
+        .eq("role", "client"),
+      supabase
+        .from("platforms")
+        .select("id, name")
+        .order("name", { ascending: true }),
+    ]);
 
   if (!projectRes.data) notFound();
   const project = projectRes.data;
 
   const missions = missionsRes.data ?? [];
+  const platforms: Platform[] = platformsRes.data ?? [];
   const episodes: Episode[] = (episodesRes.data ?? []).map((e) => ({
     id: e.id,
     name: e.name,
@@ -71,7 +79,7 @@ export default async function ProjetDetailPage({
     location: e.location,
     guests: Array.isArray(e.guests) ? e.guests : [],
     equipment: Array.isArray(e.equipment) ? e.equipment : [],
-    platform: e.platform,
+    platforms: Array.isArray(e.platforms) ? e.platforms : [],
     notes: e.notes,
     mission_count: missions.filter((m) => m.episode_id === e.id).length,
   }));
@@ -140,7 +148,11 @@ export default async function ProjetDetailPage({
         </div>
       </section>
 
-      <ProjetWorkspace projectId={project.id} episodes={episodes} />
+      <ProjetWorkspace
+        projectId={project.id}
+        episodes={episodes}
+        availablePlatforms={platforms}
+      />
     </>
   );
 }

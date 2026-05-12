@@ -1,6 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useTransition,
+  type CSSProperties,
+} from "react";
 import {
   Plus,
   Video,
@@ -11,6 +18,7 @@ import {
   MoreHorizontal,
   Trash2,
   ChevronRight,
+  GripVertical,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,28 +43,115 @@ import {
   deleteEpisode,
   moveEpisode,
 } from "../actions";
-import type { Episode } from "./page";
-import { EpisodeDetailPanel } from "./episode-detail-panel";
+import type { Episode, Platform } from "./page";
+import {
+  EpisodeDetailPanel,
+  type PanelHandle,
+} from "./episode-detail-panel";
 import { StatusBadge } from "./status-badge";
+
+const DEFAULT_PANEL_WIDTH = 640;
+const MIN_PANEL_WIDTH = 420;
 
 export function ProjetWorkspace({
   projectId,
   episodes,
+  availablePlatforms,
 }: {
   projectId: string;
   episodes: Episode[];
+  availablePlatforms: Platform[];
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH);
+  const panelRef = useRef<PanelHandle>(null);
 
   const selected = selectedId
     ? episodes.find((e) => e.id === selectedId) ?? null
     : null;
 
+  // Resize logic ---------------------------------------------------------
+  const dragStateRef = useRef<{ startX: number; startWidth: number } | null>(
+    null,
+  );
+  const onDragStart = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      dragStateRef.current = {
+        startX: e.clientX,
+        startWidth: panelWidth,
+      };
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+    },
+    [panelWidth],
+  );
+
+  useEffect(() => {
+    function onMove(e: MouseEvent) {
+      const st = dragStateRef.current;
+      if (!st) return;
+      const max = Math.max(
+        MIN_PANEL_WIDTH,
+        window.innerWidth - 320, // leave at least 320px for the list
+      );
+      const next = Math.min(
+        Math.max(st.startWidth + (st.startX - e.clientX), MIN_PANEL_WIDTH),
+        max,
+      );
+      setPanelWidth(next);
+    }
+    function onUp() {
+      if (dragStateRef.current) {
+        dragStateRef.current = null;
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      }
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, []);
+
+  // Switch / close logic -------------------------------------------------
+  const requestSelect = useCallback(
+    (newId: string | null) => {
+      if (!panelRef.current) {
+        setSelectedId(newId);
+        return;
+      }
+      panelRef.current.tryAction(() => setSelectedId(newId));
+    },
+    [],
+  );
+
+  // ESC closes the panel
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape" && selectedId) {
+        requestSelect(null);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedId, requestSelect]);
+
+  // Layout ---------------------------------------------------------------
+  // When a side-panel is open on desktop, we pad the page so the list
+  // is never hidden behind it.
+  const pagePadding: CSSProperties =
+    selected && !fullscreen
+      ? ({ "--lumen-panel-w": `${panelWidth}px` } as CSSProperties)
+      : ({ "--lumen-panel-w": "0px" } as CSSProperties);
+
   return (
-    <>
-      <div className="mb-4 flex items-center justify-between">
+    <div style={pagePadding}>
+      <div className="mb-4 flex items-center justify-between md:pr-[var(--lumen-panel-w,0px)]">
         <h2 className="font-heading text-xl font-light tracking-wide">
           Émissions
           <span className="ml-2 text-xs text-muted-foreground">
@@ -77,7 +172,7 @@ export function ProjetWorkspace({
           projectId={projectId}
           onSuccess={(id) => {
             setAddOpen(false);
-            setSelectedId(id);
+            requestSelect(id);
           }}
         />
       </Dialog>
@@ -85,52 +180,62 @@ export function ProjetWorkspace({
       {episodes.length === 0 ? (
         <EmptyState />
       ) : (
-        <div className="flex flex-col gap-6 md:flex-row md:items-start">
-          {/* LIST */}
-          <div
-            className={cn(
-              "transition-all",
-              selected ? "hidden md:block" : "block",
-              fullscreen ? "md:hidden" : "",
-              selected ? "md:w-96 md:flex-shrink-0" : "md:w-full",
-            )}
-          >
-            <EpisodeList
-              projectId={projectId}
-              episodes={episodes}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-              compact={selected !== null}
-            />
-          </div>
-
-          {/* DETAIL */}
-          {selected ? (
-            <div
-              className={cn(
-                "fixed inset-0 z-40 overflow-y-auto bg-background p-4",
-                "md:static md:z-auto md:flex-1 md:overflow-visible md:bg-transparent md:p-0",
-                fullscreen
-                  ? "md:fixed md:inset-0 md:z-40 md:overflow-y-auto md:bg-background md:p-6"
-                  : "",
-              )}
-            >
-              <EpisodeDetailPanel
-                key={selected.id}
-                episode={selected}
-                projectId={projectId}
-                fullscreen={fullscreen}
-                onToggleFullscreen={() => setFullscreen(!fullscreen)}
-                onClose={() => {
-                  setSelectedId(null);
-                  setFullscreen(false);
-                }}
-              />
-            </div>
-          ) : null}
+        <div className="md:pr-[var(--lumen-panel-w,0px)]">
+          <EpisodeList
+            projectId={projectId}
+            episodes={episodes}
+            selectedId={selectedId}
+            onSelect={requestSelect}
+            compact={selected !== null}
+          />
         </div>
       )}
-    </>
+
+      {/* DETAIL PANEL --------------------------------------------------- */}
+      {selected ? (
+        <aside
+          className={cn(
+            // mobile : plein écran
+            "fixed inset-0 z-40 overflow-y-auto bg-background",
+            // desktop : fenêtre à droite
+            "md:left-auto md:right-0 md:top-0 md:h-screen md:border-l md:border-white/[0.08] md:shadow-[-24px_0_60px_-30px_oklch(0_0_0/0.8)]",
+            // fullscreen : prend tout l'écran sur desktop
+            fullscreen
+              ? "md:left-0 md:right-0 md:w-full md:border-l-0"
+              : "",
+          )}
+          style={
+            fullscreen
+              ? undefined
+              : ({ width: `${panelWidth}px` } as CSSProperties)
+          }
+        >
+          {/* Drag handle (desktop, side mode only) */}
+          {!fullscreen ? (
+            <div
+              onMouseDown={onDragStart}
+              className="group/handle absolute left-0 top-0 hidden h-full w-2 cursor-col-resize md:flex"
+              aria-label="Redimensionner le panneau"
+              role="separator"
+            >
+              <div className="my-auto h-12 w-1 rounded-r-full bg-white/10 transition-colors group-hover/handle:bg-primary/40" />
+              <GripVertical className="pointer-events-none absolute left-1/2 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 text-white/30 opacity-0 transition-opacity group-hover/handle:opacity-100" />
+            </div>
+          ) : null}
+
+          <EpisodeDetailPanel
+            ref={panelRef}
+            key={selected.id}
+            episode={selected}
+            projectId={projectId}
+            availablePlatforms={availablePlatforms}
+            fullscreen={fullscreen}
+            onToggleFullscreen={() => setFullscreen(!fullscreen)}
+            onClose={() => requestSelect(null)}
+          />
+        </aside>
+      ) : null}
+    </div>
   );
 }
 
@@ -231,7 +336,10 @@ function EpisodeListItem({
             </span>
           ) : null}
           {!compact && episode.mission_count > 0 ? (
-            <span>· {episode.mission_count} mission{episode.mission_count > 1 ? "s" : ""}</span>
+            <span>
+              · {episode.mission_count} mission
+              {episode.mission_count > 1 ? "s" : ""}
+            </span>
           ) : null}
         </div>
       </div>

@@ -377,6 +377,10 @@ export async function saveEpisode(
     ? payload.equipment.map((s) => String(s).trim()).filter(Boolean)
     : [];
 
+  const platforms = Array.isArray(payload.platforms)
+    ? payload.platforms.map((s) => String(s).trim()).filter(Boolean)
+    : [];
+
   const admin = createAdminClient();
   const { error } = await admin
     .from("episodes")
@@ -391,7 +395,7 @@ export async function saveEpisode(
       location: payload.location?.trim() || null,
       guests,
       equipment,
-      platform: payload.platform?.trim() || null,
+      platforms,
       notes: payload.notes?.trim() || null,
       description: payload.description?.trim() || null,
     })
@@ -401,6 +405,47 @@ export async function saveEpisode(
 
   revalidatePath(`/producteur/projets/${projectId}`);
   return { ok: true };
+}
+
+// ============================================================================
+// PLATFORMS — référentiel global
+// ============================================================================
+
+export type CreatePlatformResult =
+  | { ok: true; platform: { id: string; name: string } }
+  | { ok: false; error: string };
+
+export async function createPlatform(
+  name: string,
+): Promise<CreatePlatformResult> {
+  const guard = await getProducteur();
+  if (!guard.ok) return guard;
+
+  const trimmed = name.trim();
+  if (!trimmed) return { ok: false, error: "Nom requis." };
+  if (trimmed.length > 60) {
+    return { ok: false, error: "Nom trop long (60 caractères max)." };
+  }
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("platforms")
+    .insert({ name: trimmed, created_by: guard.user.id })
+    .select("id, name")
+    .single();
+
+  if (error || !data) {
+    return {
+      ok: false,
+      error: error?.code === "23505"
+        ? "Cette plateforme existe déjà."
+        : error?.message ?? "Erreur",
+    };
+  }
+
+  // Revalidate any page that might display the platforms list.
+  revalidatePath("/producteur", "layout");
+  return { ok: true, platform: { id: data.id, name: data.name } };
 }
 
 export async function deleteEpisode(
