@@ -284,22 +284,47 @@ export async function createClientInline(input: {
 // EPISODES
 // ============================================================================
 
-export type CreateEpisodeState = Result | null;
+export const EPISODE_STATUSES = [
+  "idea",
+  "planning",
+  "shooting",
+  "editing",
+  "delivered",
+  "published",
+] as const;
+export type EpisodeStatus = (typeof EPISODE_STATUSES)[number];
 
+export type EpisodePayload = {
+  name: string;
+  format: string | null;
+  status: EpisodeStatus;
+  production_date: string | null;
+  production_time: string | null;
+  duration_minutes: number | null;
+  publication_date: string | null;
+  location: string | null;
+  guests: string[];
+  equipment: string[];
+  platform: string | null;
+  notes: string | null;
+  description: string | null;
+};
+
+export type CreateEpisodeResult = Result<{ episodeId: string }>;
+
+/**
+ * Creates a new episode with default values. Detailed edits go through
+ * saveEpisode below — keeps the creation path lightweight (just a name).
+ */
 export async function createEpisode(
   projectId: string,
-  _prev: CreateEpisodeState,
-  formData: FormData,
-): Promise<CreateEpisodeState> {
+  name: string,
+): Promise<CreateEpisodeResult> {
   const guard = await getProducteur();
   if (!guard.ok) return guard;
 
-  const name = String(formData.get("name") ?? "").trim();
-  const description = String(formData.get("description") ?? "").trim();
-  const productionDate = parseOptionalDate(formData.get("production_date"));
-  const publicationDate = parseOptionalDate(formData.get("publication_date"));
-
-  if (!name) return { ok: false, error: "Nom requis." };
+  const trimmed = name.trim();
+  if (!trimmed) return { ok: false, error: "Nom requis." };
 
   const admin = createAdminClient();
 
@@ -314,47 +339,82 @@ export async function createEpisode(
 
   const nextOrder = (maxRow?.order_index ?? -1) + 1;
 
-  const { error } = await admin.from("episodes").insert({
-    project_id: projectId,
-    name,
-    description: description || null,
-    production_date: productionDate,
-    publication_date: publicationDate,
-    order_index: nextOrder,
-  });
+  const { data, error } = await admin
+    .from("episodes")
+    .insert({
+      project_id: projectId,
+      name: trimmed,
+      order_index: nextOrder,
+      status: "idea",
+    })
+    .select("id")
+    .single();
 
-  if (error) return { ok: false, error: error.message };
+  if (error || !data) {
+    return { ok: false, error: error?.message ?? "Erreur de création." };
+  }
 
   revalidatePath(`/producteur/projets/${projectId}`);
-  return { ok: true };
+  return { ok: true, episodeId: data.id };
 }
 
-export type UpdateEpisodeState = Result | null;
-
-export async function updateEpisode(
+/**
+ * Saves the full episode payload in one call (single "Enregistrer" button
+ * in the detail panel). Validates each field server-side and returns a
+ * single error if anything fails — no half-saves.
+ */
+export async function saveEpisode(
   episodeId: string,
   projectId: string,
-  _prev: UpdateEpisodeState,
-  formData: FormData,
-): Promise<UpdateEpisodeState> {
+  payload: EpisodePayload,
+): Promise<Result> {
   const guard = await getProducteur();
   if (!guard.ok) return guard;
 
-  const name = String(formData.get("name") ?? "").trim();
-  const description = String(formData.get("description") ?? "").trim();
-  const productionDate = parseOptionalDate(formData.get("production_date"));
-  const publicationDate = parseOptionalDate(formData.get("publication_date"));
-
+  const name = payload.name.trim();
   if (!name) return { ok: false, error: "Nom requis." };
+
+  if (!EPISODE_STATUSES.includes(payload.status)) {
+    return { ok: false, error: "Statut invalide." };
+  }
+
+  const productionDate = parseOptionalDate(payload.production_date);
+  const publicationDate = parseOptionalDate(payload.publication_date);
+  const productionTime = parseOptionalTime(payload.production_time);
+
+  let durationMinutes: number | null = null;
+  if (payload.duration_minutes !== null && payload.duration_minutes !== undefined) {
+    const n = Number(payload.duration_minutes);
+    if (!Number.isFinite(n) || n < 0 || n > 60 * 24 * 7) {
+      return { ok: false, error: "Durée invalide." };
+    }
+    durationMinutes = Math.round(n);
+  }
+
+  const guests = Array.isArray(payload.guests)
+    ? payload.guests.map((s) => String(s).trim()).filter(Boolean)
+    : [];
+  const equipment = Array.isArray(payload.equipment)
+    ? payload.equipment.map((s) => String(s).trim()).filter(Boolean)
+    : [];
 
   const admin = createAdminClient();
   const { error } = await admin
     .from("episodes")
     .update({
       name,
-      description: description || null,
+      format: payload.format?.trim() || null,
+      status: payload.status,
       production_date: productionDate,
+      production_time: productionTime,
+      duration_minutes: durationMinutes,
       publication_date: publicationDate,
+      location: payload.location?.trim() || null,
+      guests,
+      equipment,
+      platform: payload.platform?.trim() || null,
+      notes: payload.notes?.trim() || null,
+      description: payload.description?.trim() || null,
     })
     .eq("id", episodeId);
 
@@ -437,8 +497,10 @@ export async function moveEpisode(
   return { ok: true };
 }
 
-function parseOptionalDate(input: FormDataEntryValue | null): string | null {
-  if (!input) return null;
+function parseOptionalDate(
+  input: FormDataEntryValue | string | null | undefined,
+): string | null {
+  if (input == null) return null;
   const raw = String(input).trim();
   if (!raw) return null;
   // HTML <input type="date"> returns "YYYY-MM-DD".
@@ -446,4 +508,15 @@ function parseOptionalDate(input: FormDataEntryValue | null): string | null {
   const dt = new Date(`${raw}T12:00:00-04:00`);
   if (Number.isNaN(dt.getTime())) return null;
   return dt.toISOString();
+}
+
+function parseOptionalTime(
+  input: string | null | undefined,
+): string | null {
+  if (input == null) return null;
+  const raw = String(input).trim();
+  if (!raw) return null;
+  // HTML <input type="time"> returns "HH:MM" — Postgres accepts that as time.
+  if (!/^\d{2}:\d{2}(:\d{2})?$/.test(raw)) return null;
+  return raw;
 }

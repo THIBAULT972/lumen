@@ -3,15 +3,25 @@ import Link from "next/link";
 import { ArrowLeft, Users, Video } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/server";
-import { ProjetDetail } from "./projet-detail";
+import type { EpisodeStatus } from "../actions";
+import { ProjetWorkspace } from "./projet-workspace";
 
 export type Episode = {
   id: string;
   name: string;
   description: string | null;
   order_index: number;
+  status: EpisodeStatus;
+  format: string | null;
   production_date: string | null;
+  production_time: string | null;
+  duration_minutes: number | null;
   publication_date: string | null;
+  location: string | null;
+  guests: string[];
+  equipment: string[];
+  platform: string | null;
+  notes: string | null;
   mission_count: number;
 };
 
@@ -26,15 +36,13 @@ export default async function ProjetDetailPage({
   const [projectRes, episodesRes, missionsRes, clientsRes] = await Promise.all([
     supabase
       .from("projects")
-      .select(
-        "id, name, description, client_id, archived_at, created_at, updated_at",
-      )
+      .select("id, name, description, client_id, archived_at")
       .eq("id", id)
       .maybeSingle(),
     supabase
       .from("episodes")
       .select(
-        "id, name, description, order_index, production_date, publication_date",
+        "id, name, description, order_index, status, format, production_date, production_time, duration_minutes, publication_date, location, guests, equipment, platform, notes",
       )
       .eq("project_id", id)
       .order("order_index", { ascending: true }),
@@ -50,7 +58,21 @@ export default async function ProjetDetailPage({
 
   const missions = missionsRes.data ?? [];
   const episodes: Episode[] = (episodesRes.data ?? []).map((e) => ({
-    ...e,
+    id: e.id,
+    name: e.name,
+    description: e.description,
+    order_index: e.order_index,
+    status: (e.status ?? "idea") as EpisodeStatus,
+    format: e.format,
+    production_date: e.production_date,
+    production_time: e.production_time,
+    duration_minutes: e.duration_minutes,
+    publication_date: e.publication_date,
+    location: e.location,
+    guests: Array.isArray(e.guests) ? e.guests : [],
+    equipment: Array.isArray(e.equipment) ? e.equipment : [],
+    platform: e.platform,
+    notes: e.notes,
     mission_count: missions.filter((m) => m.episode_id === e.id).length,
   }));
 
@@ -118,7 +140,7 @@ export default async function ProjetDetailPage({
         </div>
       </section>
 
-      <ProjetDetail projectId={project.id} episodes={episodes} />
+      <ProjetWorkspace projectId={project.id} episodes={episodes} />
     </>
   );
 }

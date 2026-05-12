@@ -124,7 +124,7 @@ prod/
 | `user_skills` | Producteur | M:N entre profiles et skills |
 | `projects` | Producteur | Dossier (1 client_id par projet, nullable). Visibilité contrôlée par `project_producteurs` |
 | `project_producteurs` | M:N | Lie un projet aux N producteurs qui le gèrent. **Filtre principal** des projets côté producteur |
-| `episodes` | Producteur | N émissions par projet, avec `production_date` + `publication_date` |
+| `episodes` | Producteur | N émissions par projet. Champs prod enrichis : `status` (workflow enum), `format`, `production_date` + `production_time` + `duration_minutes`, `publication_date`, `location`, `guests` (jsonb), `equipment` (jsonb), `platform`, `notes` |
 | `missions` | Producteur (CRUD) + prestataires (accept/cancel) | Cœur métier, voir §5 |
 | `files` | Mixte (cf. RLS) | Path Supabase Storage tracké ici. `target` enum définit le contexte |
 | `text_documents` | Producteur (CRUD) | Stocke JSON Tiptap. Édition temps réel = post-MVP |
@@ -179,7 +179,7 @@ Projet ──┬──> Émission 1 ──┬──> Mission 1 (droniste, 15/07,
          └──> Émission N
 ```
 - Un projet a 2 natures : **"client"** (`client_id` rempli, livrables apparaîtront dans le hub du client) ou **"média/interne"** (`client_id` null, production pour les médias propres du studio). Aucun impact technique en BDD, juste un branchement UI à la création + un badge.
-- 1 émission a 2 dates distinctes : **production** + **parution**.
+- 1 émission a 2 dates distinctes : **production** (+ heure + durée) + **parution**, un workflow `status` (Idée → En préparation → En tournage → En montage → Livré → Publié), un format (Reportage / Interview / …), un lieu, des intervenants, de l'équipement et des notes.
 - 1 mission a 1 compétence requise + lieu + horaire + prix + statut.
 
 ### 5.2 Flux Mission "Uber"
