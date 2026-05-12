@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ArrowLeft, Users, Video } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/server";
-import type { EpisodeStatus } from "../actions";
+import type { EpisodeStatus } from "../episode-types";
 import { ProjetWorkspace } from "./projet-workspace";
 
 export type Episode = {

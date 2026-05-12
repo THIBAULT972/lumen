@@ -4,6 +4,11 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getProducteur } from "@/lib/auth/guard";
 import { generatePassword } from "@/lib/auth/password";
+import {
+  EPISODE_STATUSES,
+  type EpisodePayload,
+  type EpisodeStatus,
+} from "./episode-types";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -283,32 +288,6 @@ export async function createClientInline(input: {
 // ============================================================================
 // EPISODES
 // ============================================================================
-
-export const EPISODE_STATUSES = [
-  "idea",
-  "planning",
-  "shooting",
-  "editing",
-  "delivered",
-  "published",
-] as const;
-export type EpisodeStatus = (typeof EPISODE_STATUSES)[number];
-
-export type EpisodePayload = {
-  name: string;
-  format: string | null;
-  status: EpisodeStatus;
-  production_date: string | null;
-  production_time: string | null;
-  duration_minutes: number | null;
-  publication_date: string | null;
-  location: string | null;
-  guests: string[];
-  equipment: string[];
-  platform: string | null;
-  notes: string | null;
-  description: string | null;
-};
 
 export type CreateEpisodeResult = Result<{ episodeId: string }>;
 

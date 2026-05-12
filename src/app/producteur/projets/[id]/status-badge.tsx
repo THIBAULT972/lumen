@@ -1,4 +1,4 @@
-import type { EpisodeStatus } from "../actions";
+import type { EpisodeStatus } from "../episode-types";
 import { cn } from "@/lib/utils";
 
 const LABELS: Record<EpisodeStatus, string> = {
