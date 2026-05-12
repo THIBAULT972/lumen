@@ -19,7 +19,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   DropdownMenu,
@@ -53,13 +52,14 @@ export function CompetencesManager({ skills }: { skills: SkillWithUsage[] }) {
         <p className="text-sm text-muted-foreground">
           {skills.length} compétence{skills.length > 1 ? "s" : ""}
         </p>
+        <Button
+          className="bg-gradient-neon text-white"
+          onClick={() => setAddOpen(true)}
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          Ajouter une compétence
+        </Button>
         <Dialog open={addOpen} onOpenChange={setAddOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-gradient-neon text-white">
-              <Plus className="mr-2 h-4 w-4" />
-              Ajouter une compétence
-            </Button>
-          </DialogTrigger>
           <AddSkillDialog onSuccess={() => setAddOpen(false)} />
         </Dialog>
       </div>
@@ -177,14 +177,11 @@ function SkillRow({ skill }: { skill: SkillWithUsage }) {
       </TableCell>
       <TableCell>
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="rounded-md p-2 transition-colors hover:bg-white/[0.06]"
-              aria-label="Actions"
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </button>
+          <DropdownMenuTrigger
+            className="rounded-md p-2 transition-colors hover:bg-white/[0.06]"
+            aria-label="Actions"
+          >
+            <MoreHorizontal className="h-4 w-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="glass-panel border-white/10">
             <DropdownMenuItem onSelect={() => setRenameOpen(true)}>

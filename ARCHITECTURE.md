@@ -264,6 +264,11 @@ Réinitialisables via `npm run seed` (idempotent).
 - ✋ Le réglage "Automatically expose new tables = OFF" de Supabase bloque toutes les requêtes REST tant qu'on n'a pas fait les `GRANT` manuels. Voir `db/grants.sql`.
 - ✋ Une clé JWT legacy partagée en chat reste indéfiniment dans l'historique → toujours utiliser le nouveau format `sb_secret_*` et faire tourner la clé si exposée.
 - ✋ Un Server Component ne peut pas importer `motion/react` directement → extraire en sous-composant client.
+- ✋ **shadcn/ui v4+ utilise `@base-ui/react`, pas Radix UI.** Conséquences :
+  - **Pas de prop `asChild`** (Radix-only). Base UI utilise `render={<MonComposant />}` à la place.
+  - Pattern recommandé pour avoir un Button stylé qui ouvre une Dialog : **ne pas utiliser DialogTrigger** du tout, contrôler `open`/`onOpenChange` manuellement avec un `<Button onClick={() => setOpen(true)}>` à côté.
+  - Pour DropdownMenuTrigger : passer `className` directement (le composant rend déjà un `<button>`), **pas de wrapper `<button>` enfant**.
+- ✋ **Le proxy ne doit PAS traiter les requêtes non-GET.** Les server actions (POST) et les RSC fetches utilisent un protocole streamé que Next compose lui-même. Si le proxy fait `NextResponse.next({ request })` ou écrit dans la response (typique du pattern Supabase SSR pour rafraîchir les cookies), le stream est corrompu et le client reçoit `An unexpected response was received from the server`. **Solution** : `if (request.method !== "GET") return NextResponse.next();` en début de proxy. La session reste rafraîchie par `createClient()` côté serveur.
 
 ---
 

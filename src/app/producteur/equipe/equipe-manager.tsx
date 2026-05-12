@@ -31,7 +31,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   DropdownMenu,
@@ -90,13 +89,14 @@ export function EquipeManager({
           {prestataires.length} prestataire{prestataires.length > 1 ? "s" : ""}{" "}
           · {clients.length} client{clients.length > 1 ? "s" : ""}
         </p>
+        <Button
+          className="bg-gradient-neon text-white"
+          onClick={() => setAddOpen(true)}
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          Ajouter un membre
+        </Button>
         <Dialog open={addOpen} onOpenChange={setAddOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-gradient-neon text-white">
-              <Plus className="mr-2 h-4 w-4" />
-              Ajouter un membre
-            </Button>
-          </DialogTrigger>
           <AddMemberDialog
             skills={skills}
             onSuccess={(generated) => {
@@ -273,14 +273,11 @@ function MemberRow({
       </TableCell>
       <TableCell>
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="rounded-md p-2 transition-colors hover:bg-white/[0.06]"
-              aria-label="Actions"
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </button>
+          <DropdownMenuTrigger
+            className="rounded-md p-2 transition-colors hover:bg-white/[0.06]"
+            aria-label="Actions"
+          >
+            <MoreHorizontal className="h-4 w-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent
             align="end"
