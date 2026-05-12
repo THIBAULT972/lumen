@@ -47,9 +47,9 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* LUMEN — Light palette (off-white + accents néon conservés) */
+/* LUMEN — Light palette (clean white cards + accents néon conservés) */
 :root {
-  --background: oklch(0.99 0.003 260);
+  --background: oklch(0.97 0.004 260);
   --foreground: oklch(0.16 0.01 260);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.16 0.01 260);
@@ -57,14 +57,14 @@
   --popover-foreground: oklch(0.16 0.01 260);
   --primary: oklch(0.55 0.22 258);
   --primary-foreground: oklch(0.99 0.003 260);
-  --secondary: oklch(0.96 0.005 260);
+  --secondary: oklch(0.94 0.006 260);
   --secondary-foreground: oklch(0.16 0.01 260);
-  --muted: oklch(0.95 0.005 260);
-  --muted-foreground: oklch(0.45 0.01 260);
+  --muted: oklch(0.93 0.006 260);
+  --muted-foreground: oklch(0.45 0.012 260);
   --accent: oklch(0.55 0.25 305);
   --accent-foreground: oklch(0.99 0.003 260);
   --destructive: oklch(0.6 0.25 22);
-  --border: oklch(0.16 0.01 260 / 10%);
+  --border: oklch(0.16 0.01 260 / 12%);
   --input: oklch(0.16 0.01 260 / 8%);
   --ring: oklch(0.55 0.22 258 / 50%);
   --chart-1: oklch(0.55 0.22 258);
@@ -73,25 +73,21 @@
   --chart-4: oklch(0.5 0.2 340);
   --chart-5: oklch(0.65 0.15 230);
   --radius: 0.75rem;
-  --sidebar: oklch(0.97 0.005 260);
+  --sidebar: oklch(0.95 0.005 260);
   --sidebar-foreground: oklch(0.16 0.01 260);
   --sidebar-primary: oklch(0.55 0.22 258);
   --sidebar-primary-foreground: oklch(0.99 0.003 260);
-  --sidebar-accent: oklch(0.94 0.005 260);
+  --sidebar-accent: oklch(0.92 0.006 260);
   --sidebar-accent-foreground: oklch(0.16 0.01 260);
   --sidebar-border: oklch(0.16 0.01 260 / 8%);
   --sidebar-ring: oklch(0.55 0.22 258 / 50%);
 
-  /* Glass surface uses dark ink on light background. */
-  --glass-from: oklch(0.16 0.01 260 / 3%);
-  --glass-to: oklch(0.16 0.01 260 / 1%);
+  /* Glass = clean white cards lifted from the off-white background. */
+  --glass-from: oklch(1 0 0 / 90%);
+  --glass-to: oklch(1 0 0 / 70%);
   --glass-border: oklch(0.16 0.01 260 / 10%);
-  --glass-highlight: oklch(1 0 0 / 50%);
-  --glass-shadow: oklch(0.16 0.01 260 / 12%);
-
-  /* Hairline surface (used for cards, panels, hover) */
-  --surface-1: oklch(0.16 0.01 260 / 4%);
-  --surface-2: oklch(0.16 0.01 260 / 7%);
+  --glass-highlight: oklch(1 0 0 / 100%);
+  --glass-shadow: oklch(0.16 0.01 260 / 10%);
 }
 
 /* LUMEN — Dark OLED palette
@@ -139,9 +135,6 @@
   --glass-border: oklch(1 0 0 / 8%);
   --glass-highlight: oklch(1 0 0 / 6%);
   --glass-shadow: oklch(0 0 0 / 80%);
-
-  --surface-1: oklch(1 0 0 / 3%);
-  --surface-2: oklch(1 0 0 / 6%);
 }
 
 @layer base {
@@ -179,13 +172,6 @@
       0 24px 60px -20px var(--glass-shadow);
   }
 
-  /* Hairline surface (used for inputs, soft hovers, chips) */
-  .surface-1 {
-    background: var(--surface-1);
-  }
-  .surface-2 {
-    background: var(--surface-2);
-  }
 
   /* Neon gradient text */
   .text-gradient-neon {
