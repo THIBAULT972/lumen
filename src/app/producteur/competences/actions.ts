@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { assertProducteur } from "@/lib/auth/guard";
+import { getProducteur } from "@/lib/auth/guard";
 
 type Result = { ok: true } | { ok: false; error: string };
 
@@ -12,7 +12,8 @@ export async function createSkill(
   _prev: CreateSkillState,
   formData: FormData,
 ): Promise<CreateSkillState> {
-  await assertProducteur();
+  const guard = await getProducteur();
+  if (!guard.ok) return guard;
 
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return { ok: false, error: "Nom requis." };
@@ -37,7 +38,8 @@ export async function renameSkill(
   skillId: string,
   newName: string,
 ): Promise<Result> {
-  await assertProducteur();
+  const guard = await getProducteur();
+  if (!guard.ok) return guard;
 
   const trimmed = newName.trim();
   if (!trimmed) return { ok: false, error: "Nom requis." };
@@ -60,12 +62,9 @@ export async function renameSkill(
   return { ok: true };
 }
 
-/**
- * Deletes a skill only if it is not linked to any prestataire and not
- * required by any mission. Otherwise, refuses with a user-friendly message.
- */
 export async function deleteSkill(skillId: string): Promise<Result> {
-  await assertProducteur();
+  const guard = await getProducteur();
+  if (!guard.ok) return guard;
 
   const admin = createAdminClient();
 

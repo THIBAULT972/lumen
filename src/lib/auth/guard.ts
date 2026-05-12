@@ -1,13 +1,16 @@
+import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 
+export type GuardResult =
+  | { ok: true; user: User }
+  | { ok: false; error: string };
+
 /**
- * Throws if the caller is not authenticated or not a producteur.
- * Use at the top of every server action that performs admin operations
- * (createUser, deleteUser, schema mutations bypassing RLS, etc.).
- *
- * Returns the authenticated user so the action can record `created_by` etc.
+ * Returns the authenticated producteur, or an error result. Never throws —
+ * callers must check `result.ok` so the failure can be surfaced cleanly
+ * in the UI instead of leaking as an unhandled rejection.
  */
-export async function assertProducteur() {
+export async function getProducteur(): Promise<GuardResult> {
   const supabase = await createClient();
 
   const {
@@ -15,7 +18,7 @@ export async function assertProducteur() {
     error: userErr,
   } = await supabase.auth.getUser();
   if (userErr || !user) {
-    throw new Error("Unauthorized");
+    return { ok: false, error: "Session expirée, reconnecte-toi." };
   }
 
   const { data: profile, error: profileErr } = await supabase
@@ -24,11 +27,11 @@ export async function assertProducteur() {
     .eq("id", user.id)
     .single();
   if (profileErr || !profile) {
-    throw new Error("Profile not found");
+    return { ok: false, error: "Profil introuvable, reconnecte-toi." };
   }
   if (profile.role !== "producteur") {
-    throw new Error("Forbidden");
+    return { ok: false, error: "Action réservée aux producteurs." };
   }
 
-  return user;
+  return { ok: true, user };
 }

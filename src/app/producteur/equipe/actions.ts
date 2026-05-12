@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { assertProducteur } from "@/lib/auth/guard";
+import { getProducteur } from "@/lib/auth/guard";
 import { generatePassword } from "@/lib/auth/password";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -17,16 +17,13 @@ export type CreateMemberState = ActionResult<{
   email: string;
 }> | null;
 
-/**
- * Creates an auth user + profile row, links skills if prestataire.
- * Server generates the password and returns it once — the producteur must
- * transmit it manually to the new member.
- */
 export async function createMember(
   _prev: CreateMemberState,
   formData: FormData,
 ): Promise<CreateMemberState> {
-  const me = await assertProducteur();
+  const guard = await getProducteur();
+  if (!guard.ok) return guard;
+  const me = guard.user;
 
   const email = String(formData.get("email") ?? "")
     .trim()
@@ -40,10 +37,7 @@ export async function createMember(
     return { ok: false, error: "Email invalide." };
   }
   if (role !== "prestataire" && role !== "client") {
-    return {
-      ok: false,
-      error: "Rôle invalide. Choisis prestataire ou client.",
-    };
+    return { ok: false, error: "Rôle invalide. Choisis prestataire ou client." };
   }
 
   const admin = createAdminClient();
@@ -76,7 +70,6 @@ export async function createMember(
   });
 
   if (profileErr) {
-    // Rollback the auth user — we don't want orphan auth rows.
     await admin.auth.admin.deleteUser(userId);
     return { ok: false, error: profileErr.message };
   }
@@ -86,8 +79,6 @@ export async function createMember(
       .from("user_skills")
       .insert(skillIds.map((sid) => ({ user_id: userId, skill_id: sid })));
     if (usErr) {
-      // Profile + auth are valid; only the skill links failed. Surface a
-      // warning but keep the account. Producteur can re-edit skills later.
       console.warn("user_skills insert failed:", usErr.message);
     }
   }
@@ -99,16 +90,13 @@ export async function createMember(
 
 export type UpdateMemberState = ActionResult | null;
 
-/**
- * Updates first_name / last_name / skills of an existing member.
- * Email and role are not editable here (change of role would be a re-creation).
- */
 export async function updateMember(
   userId: string,
   _prev: UpdateMemberState,
   formData: FormData,
 ): Promise<UpdateMemberState> {
-  await assertProducteur();
+  const guard = await getProducteur();
+  if (!guard.ok) return guard;
 
   const firstName = String(formData.get("first_name") ?? "").trim();
   const lastName = String(formData.get("last_name") ?? "").trim();
@@ -136,7 +124,6 @@ export async function updateMember(
   if (profileErr) return { ok: false, error: profileErr.message };
 
   if (target.role === "prestataire") {
-    // Full resync : drop all current links, re-insert the chosen set.
     await admin.from("user_skills").delete().eq("user_id", userId);
     if (skillIds.length > 0) {
       const { error: usErr } = await admin
@@ -155,7 +142,9 @@ export type DeleteMemberResult = { ok: true } | { ok: false; error: string };
 export async function deleteMember(
   userId: string,
 ): Promise<DeleteMemberResult> {
-  const me = await assertProducteur();
+  const guard = await getProducteur();
+  if (!guard.ok) return guard;
+  const me = guard.user;
 
   if (me.id === userId) {
     return { ok: false, error: "Tu ne peux pas te supprimer toi-même." };
@@ -171,8 +160,7 @@ export async function deleteMember(
   if (target?.role === "producteur") {
     return {
       ok: false,
-      error:
-        "Suppression d'un autre producteur non autorisée pour l'instant.",
+      error: "Suppression d'un autre producteur non autorisée pour l'instant.",
     };
   }
 
@@ -192,7 +180,8 @@ export type RegeneratePasswordResult =
 export async function regeneratePassword(
   userId: string,
 ): Promise<RegeneratePasswordResult> {
-  await assertProducteur();
+  const guard = await getProducteur();
+  if (!guard.ok) return guard;
 
   const password = generatePassword();
   const admin = createAdminClient();
