@@ -614,6 +614,9 @@ function DeleteMemberDialog({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  const normalized = confirmation.trim().toLowerCase();
+  const confirmed = normalized === "supprimer";
+
   function submit() {
     setError(null);
     startTransition(async () => {
@@ -651,8 +654,9 @@ function DeleteMemberDialog({
 
         <div className="space-y-2">
           <Label htmlFor="confirm">
-            Tape <span className="font-mono text-foreground">supprimer</span>{" "}
-            pour confirmer
+            Tape{" "}
+            <span className="font-mono text-foreground">supprimer</span> pour
+            confirmer
           </Label>
           <Input
             id="confirm"
@@ -660,7 +664,21 @@ function DeleteMemberDialog({
             onChange={(e) => setConfirmation(e.target.value)}
             className="h-11 bg-white/[0.03]"
             autoComplete="off"
+            autoFocus
           />
+          {confirmation.length > 0 ? (
+            <p
+              className={
+                confirmed
+                  ? "text-xs text-emerald-400"
+                  : "text-xs text-muted-foreground"
+              }
+            >
+              {confirmed
+                ? "✓ Confirmation acceptée, clique sur Supprimer."
+                : `Encore "${"supprimer".slice(normalized.length) || "..."}" à taper.`}
+            </p>
+          ) : null}
         </div>
 
         {error ? (
@@ -681,7 +699,7 @@ function DeleteMemberDialog({
           <Button
             type="button"
             variant="destructive"
-            disabled={pending || confirmation !== "supprimer"}
+            disabled={pending || !confirmed}
             onClick={submit}
           >
             {pending ? (
