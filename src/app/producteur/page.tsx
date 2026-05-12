@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import {
   Briefcase,
   FolderOpen,
@@ -8,32 +7,48 @@ import {
   Bell,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { DashboardShell } from "@/components/dashboard/shell";
 import { StatCard } from "@/components/dashboard/stat-card";
 
 export default async function ProducteurPage() {
   const supabase = await createClient();
 
+  // Auth + role guard handled by /producteur/layout.tsx.
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role, first_name, last_name, email")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile) redirect("/login");
-  if (profile.role !== "producteur") redirect("/");
+  const [profileRes, projectsRes, missionsRes, prestatairesRes, clientsRes] =
+    await Promise.all([
+      supabase
+        .from("profiles")
+        .select("first_name, last_name, email")
+        .eq("id", user!.id)
+        .single(),
+      supabase
+        .from("projects")
+        .select("id", { count: "exact", head: true })
+        .is("archived_at", null),
+      supabase
+        .from("missions")
+        .select("id", { count: "exact", head: true })
+        .in("status", ["broadcast", "accepted", "in_progress"]),
+      supabase
+        .from("profiles")
+        .select("id", { count: "exact", head: true })
+        .eq("role", "prestataire"),
+      supabase
+        .from("profiles")
+        .select("id", { count: "exact", head: true })
+        .eq("role", "client"),
+    ]);
 
   const displayName =
-    [profile.first_name, profile.last_name].filter(Boolean).join(" ") ||
-    profile.email;
+    [profileRes.data?.first_name, profileRes.data?.last_name]
+      .filter(Boolean)
+      .join(" ") || profileRes.data?.email || "Producteur";
 
   return (
-    <DashboardShell role="Producteur" userName={displayName}>
+    <>
       <section className="mb-10">
         <p className="text-[11px] uppercase tracking-[0.32em] text-muted-foreground">
           Studio · Vue d'ensemble
@@ -48,10 +63,28 @@ export default async function ProducteurPage() {
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard icon={FolderOpen} label="Projets actifs" value="0" hint="Aucun projet pour l'instant" />
-        <StatCard icon={Briefcase} label="Missions en cours" value="0" hint="Aucune mission active" />
-        <StatCard icon={Users} label="Prestataires" value="0" hint="0 disponibles" />
-        <StatCard icon={UserCircle} label="Clients" value="0" hint="0 hubs créés" />
+        <StatCard
+          icon={FolderOpen}
+          label="Projets actifs"
+          value={String(projectsRes.count ?? 0)}
+          hint={(projectsRes.count ?? 0) === 0 ? "Aucun projet pour l'instant" : undefined}
+        />
+        <StatCard
+          icon={Briefcase}
+          label="Missions en cours"
+          value={String(missionsRes.count ?? 0)}
+          hint={(missionsRes.count ?? 0) === 0 ? "Aucune mission active" : undefined}
+        />
+        <StatCard
+          icon={Users}
+          label="Prestataires"
+          value={String(prestatairesRes.count ?? 0)}
+        />
+        <StatCard
+          icon={UserCircle}
+          label="Clients"
+          value={String(clientsRes.count ?? 0)}
+        />
       </section>
 
       <section className="mt-10 grid gap-4 lg:grid-cols-3">
@@ -65,7 +98,7 @@ export default async function ProducteurPage() {
           icon={Briefcase}
           title="Dispatch de missions"
           body="Crée une mission, choisis la compétence requise, envoie-la à tous les prestataires concernés."
-          eta="Phase 2"
+          eta="Phase 2.3"
         />
         <PlaceholderCard
           icon={Bell}
@@ -74,7 +107,7 @@ export default async function ProducteurPage() {
           eta="Phase 4"
         />
       </section>
-    </DashboardShell>
+    </>
   );
 }
 

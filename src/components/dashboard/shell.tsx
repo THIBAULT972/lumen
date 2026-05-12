@@ -6,6 +6,8 @@ import { signOut } from "@/app/actions/auth";
 export type DashboardShellProps = {
   role: "Producteur" | "Prestataire" | "Client";
   userName: string;
+  /** Optional nav slot rendered below the top bar (e.g. role-specific tabs). */
+  nav?: ReactNode;
   children: ReactNode;
 };
 
@@ -16,6 +18,7 @@ export type DashboardShellProps = {
 export function DashboardShell({
   role,
   userName,
+  nav,
   children,
 }: DashboardShellProps) {
   return (
@@ -51,6 +54,12 @@ export function DashboardShell({
             </form>
           </div>
         </div>
+
+        {nav ? (
+          <div className="mx-auto max-w-7xl px-6">
+            <div className="-mb-px">{nav}</div>
+          </div>
+        ) : null}
       </header>
 
       <main className="relative z-10 mx-auto w-full max-w-7xl flex-1 px-6 py-10">
