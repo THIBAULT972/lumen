@@ -296,7 +296,7 @@ function MemberRow({
           </DropdownMenuTrigger>
           <DropdownMenuContent
             align="end"
-            className="glass-panel border-foreground/10"
+            className="border-foreground/10"
           >
             <DropdownMenuItem onClick={() => setEditOpen(true)}>
               <Pencil className="mr-2 h-4 w-4" />
@@ -384,7 +384,7 @@ function AddMemberDialog({
   }
 
   return (
-    <DialogContent className="glass-panel border-foreground/10 sm:max-w-lg">
+    <DialogContent className="border-foreground/10 sm:max-w-lg">
       <DialogHeader>
         <DialogTitle className="font-heading text-2xl font-light">
           Nouveau membre
@@ -546,7 +546,7 @@ function EditMemberDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="glass-panel border-foreground/10 sm:max-w-lg">
+      <DialogContent className="border-foreground/10 sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="font-heading text-2xl font-light">
             Modifier le membre
@@ -664,7 +664,7 @@ function DeleteMemberDialog({
         onOpenChange(v);
       }}
     >
-      <DialogContent className="glass-panel border-foreground/10 sm:max-w-md">
+      <DialogContent className="border-foreground/10 sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="font-heading text-2xl font-light">
             Supprimer ce membre ?
@@ -771,7 +771,7 @@ function PasswordDialog({
 
   return (
     <Dialog open={Boolean(generated)} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="glass-panel border-foreground/10 sm:max-w-md">
+      <DialogContent className="border-foreground/10 sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="font-heading text-2xl font-light">
             {title}

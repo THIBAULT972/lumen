@@ -107,7 +107,7 @@ function AddSkillDialog({ onSuccess }: { onSuccess: () => void }) {
   }, null);
 
   return (
-    <DialogContent className="glass-panel border-foreground/10 sm:max-w-md">
+    <DialogContent className="border-foreground/10 sm:max-w-md">
       <DialogHeader>
         <DialogTitle className="font-heading text-2xl font-light">
           Nouvelle compétence
@@ -183,7 +183,7 @@ function SkillRow({ skill }: { skill: SkillWithUsage }) {
           >
             <MoreHorizontal className="h-4 w-4" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="glass-panel border-foreground/10">
+          <DropdownMenuContent align="end" className="border-foreground/10">
             <DropdownMenuItem onClick={() => setRenameOpen(true)}>
               <Pencil className="mr-2 h-4 w-4" />
               Renommer
@@ -238,7 +238,7 @@ function RenameDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="glass-panel border-foreground/10 sm:max-w-md">
+      <DialogContent className="border-foreground/10 sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="font-heading text-2xl font-light">
             Renommer la compétence
@@ -307,7 +307,7 @@ function DeleteDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="glass-panel border-foreground/10 sm:max-w-md">
+      <DialogContent className="border-foreground/10 sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="font-heading text-2xl font-light">
             Supprimer « {skill.name} » ?

@@ -686,3 +686,169 @@ export async function deleteMission(
   revalidatePath(`/producteur/projets/${projectId}`);
   return { ok: true };
 }
+
+// ============================================================================
+// FILES (Supabase Storage + public.files)
+// ============================================================================
+
+const STORAGE_BUCKET = "files";
+const MAX_FILE_SIZE = 524_288_000; // 500 MB
+
+function sanitizeFilename(name: string): string {
+  return name
+    .replace(/[^a-zA-Z0-9._\-\s]/g, "_")
+    .replace(/\s+/g, "_")
+    .slice(0, 120);
+}
+
+export type FileUploadInitResult =
+  | {
+      ok: true;
+      fileId: string;
+      storagePath: string;
+      token: string;
+    }
+  | { ok: false; error: string };
+
+/**
+ * Step 1: producteur asks for a signed upload URL. We pre-insert the row
+ * in public.files (so the file is tracked) and return a token the browser
+ * uses with supabase.storage.uploadToSignedUrl(). This 2-step flow lets
+ * us upload arbitrarily large files (videos) without hitting the Next.js
+ * server-action body limit (~1MB on Vercel).
+ */
+export async function requestEpisodeFileUpload(
+  episodeId: string,
+  projectId: string,
+  filename: string,
+  mimeType: string,
+  size: number,
+): Promise<FileUploadInitResult> {
+  const guard = await getProducteur();
+  if (!guard.ok) return guard;
+
+  const cleanName = sanitizeFilename(filename);
+  if (!cleanName) return { ok: false, error: "Nom de fichier invalide." };
+  if (!Number.isFinite(size) || size < 0) {
+    return { ok: false, error: "Taille de fichier invalide." };
+  }
+  if (size > MAX_FILE_SIZE) {
+    return {
+      ok: false,
+      error: `Fichier trop volumineux (max ${Math.round(MAX_FILE_SIZE / 1_048_576)} Mo).`,
+    };
+  }
+
+  const admin = createAdminClient();
+  const id = crypto.randomUUID();
+  const storagePath = `episode/${episodeId}/${id}-${cleanName}`;
+
+  const { data: row, error: dbErr } = await admin
+    .from("files")
+    .insert({
+      id,
+      storage_path: storagePath,
+      filename: cleanName,
+      mime_type: mimeType || null,
+      size_bytes: size,
+      target: "episode",
+      episode_id: episodeId,
+      uploaded_by: guard.user.id,
+    })
+    .select("id")
+    .single();
+  if (dbErr || !row) {
+    return { ok: false, error: dbErr?.message ?? "Erreur de base de données." };
+  }
+
+  const { data: signed, error: signedErr } = await admin.storage
+    .from(STORAGE_BUCKET)
+    .createSignedUploadUrl(storagePath);
+
+  if (signedErr || !signed) {
+    await admin.from("files").delete().eq("id", row.id);
+    return {
+      ok: false,
+      error: signedErr?.message ?? "Erreur Supabase Storage.",
+    };
+  }
+
+  revalidatePath(`/producteur/projets/${projectId}`);
+  return {
+    ok: true,
+    fileId: row.id,
+    storagePath: signed.path,
+    token: signed.token,
+  };
+}
+
+/** Step 3 : after the browser finishes uploading, refresh the page cache. */
+export async function finalizeEpisodeFileUpload(
+  projectId: string,
+): Promise<Result> {
+  const guard = await getProducteur();
+  if (!guard.ok) return guard;
+  revalidatePath(`/producteur/projets/${projectId}`);
+  return { ok: true };
+}
+
+export type FileDownloadResult =
+  | { ok: true; url: string; filename: string }
+  | { ok: false; error: string };
+
+export async function requestFileDownload(
+  fileId: string,
+): Promise<FileDownloadResult> {
+  const guard = await getProducteur();
+  if (!guard.ok) return guard;
+
+  const admin = createAdminClient();
+  const { data: file, error } = await admin
+    .from("files")
+    .select("storage_path, filename")
+    .eq("id", fileId)
+    .single();
+  if (error || !file) {
+    return { ok: false, error: "Fichier introuvable." };
+  }
+
+  const { data: signed, error: signedErr } = await admin.storage
+    .from(STORAGE_BUCKET)
+    .createSignedUrl(file.storage_path, 3600, {
+      download: file.filename,
+    });
+
+  if (signedErr || !signed) {
+    return {
+      ok: false,
+      error: signedErr?.message ?? "Erreur Supabase Storage.",
+    };
+  }
+  return { ok: true, url: signed.signedUrl, filename: file.filename };
+}
+
+export async function deleteEpisodeFile(
+  fileId: string,
+  projectId: string,
+): Promise<Result> {
+  const guard = await getProducteur();
+  if (!guard.ok) return guard;
+
+  const admin = createAdminClient();
+  const { data: file, error: fileErr } = await admin
+    .from("files")
+    .select("storage_path")
+    .eq("id", fileId)
+    .single();
+  if (fileErr || !file) {
+    return { ok: false, error: "Fichier introuvable." };
+  }
+
+  await admin.storage.from(STORAGE_BUCKET).remove([file.storage_path]);
+
+  const { error: delErr } = await admin.from("files").delete().eq("id", fileId);
+  if (delErr) return { ok: false, error: delErr.message };
+
+  revalidatePath(`/producteur/projets/${projectId}`);
+  return { ok: true };
+}

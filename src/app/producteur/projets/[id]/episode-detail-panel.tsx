@@ -51,6 +51,7 @@ import type { Episode, Platform, Skill } from "./page";
 import { statusLabel } from "./status-badge";
 import { PlatformsPicker } from "./platforms-picker";
 import { MissionsSection } from "./missions-section";
+import { FilesSection } from "./files-section";
 
 const FORMAT_OPTIONS = [
   "Reportage",
@@ -386,6 +387,12 @@ export const EpisodeDetailPanel = forwardRef<PanelHandle, Props>(
               skills={availableSkills}
             />
 
+            <FilesSection
+              episodeId={episode.id}
+              projectId={projectId}
+              files={episode.files}
+            />
+
             <FieldRow
               icon={<StickyNote className="h-3.5 w-3.5" />}
               label="Notes de prod"
@@ -452,7 +459,7 @@ export const EpisodeDetailPanel = forwardRef<PanelHandle, Props>(
           open={pendingAction !== null}
           onOpenChange={(v) => !v && setPendingAction(null)}
         >
-          <DialogContent className="glass-panel border-foreground/10 sm:max-w-md">
+          <DialogContent className="border-foreground/10 sm:max-w-md">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 font-heading text-2xl font-light">
                 <AlertTriangle className="h-5 w-5 text-amber-400" />

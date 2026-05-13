@@ -381,7 +381,7 @@ function EpisodeListItem({
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
-              className="glass-panel border-foreground/10"
+              className="border-foreground/10"
             >
               <DropdownMenuItem
                 variant="destructive"
@@ -434,7 +434,7 @@ function AddEpisodeDialog({
   }
 
   return (
-    <DialogContent className="glass-panel border-foreground/10 sm:max-w-md">
+    <DialogContent className="border-foreground/10 sm:max-w-md">
       <DialogHeader>
         <DialogTitle className="font-heading text-2xl font-light">
           Nouvelle émission
@@ -505,7 +505,7 @@ function DeleteEpisodeDialog({
   }
 
   return (
-    <DialogContent className="glass-panel border-foreground/10 sm:max-w-md">
+    <DialogContent className="border-foreground/10 sm:max-w-md">
       <DialogHeader>
         <DialogTitle className="font-heading text-2xl font-light">
           Supprimer l'émission ?

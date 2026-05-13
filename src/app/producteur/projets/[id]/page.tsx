@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Users, Video } from "lucide-react";
+import { ArrowLeft, Users, Video, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/server";
 import type { EpisodeStatus } from "../episode-types";
 import type { MissionStatus } from "../mission-types";
+import type { FileRecord, FileTarget } from "../file-types";
 import { ProjetWorkspace } from "./projet-workspace";
 import type { Mission } from "./missions-section";
 
@@ -26,6 +27,7 @@ export type Episode = {
   notes: string | null;
   mission_count: number;
   missions: Mission[];
+  files: FileRecord[];
 };
 
 export type Platform = { id: string; name: string };
@@ -46,6 +48,7 @@ export default async function ProjetDetailPage({
     clientsRes,
     platformsRes,
     skillsRes,
+    filesRes,
   ] = await Promise.all([
     supabase
       .from("projects")
@@ -74,6 +77,13 @@ export default async function ProjetDetailPage({
       .select("id, name")
       .order("name", { ascending: true }),
     supabase.from("skills").select("id, name").order("name"),
+    supabase
+      .from("files")
+      .select(
+        "id, storage_path, filename, mime_type, size_bytes, target, project_id, episode_id, mission_id, destination_user_id, uploaded_by, created_at",
+      )
+      .eq("target", "episode")
+      .order("created_at", { ascending: false }),
   ]);
 
   if (!projectRes.data) notFound();
@@ -96,6 +106,20 @@ export default async function ProjetDetailPage({
   const missionsRaw = missionsRes.data ?? [];
   const platforms: Platform[] = platformsRes.data ?? [];
   const skills: Skill[] = skillsRes.data ?? [];
+  const allFiles: FileRecord[] = (filesRes.data ?? []).map((f) => ({
+    id: f.id,
+    storage_path: f.storage_path,
+    filename: f.filename,
+    mime_type: f.mime_type,
+    size_bytes: f.size_bytes,
+    target: f.target as FileTarget,
+    project_id: f.project_id,
+    episode_id: f.episode_id,
+    mission_id: f.mission_id,
+    destination_user_id: f.destination_user_id,
+    uploaded_by: f.uploaded_by,
+    created_at: f.created_at,
+  }));
   const episodesError = episodesRes.error?.message ?? null;
   const missions: Mission[] = missionsRaw.map((m) => ({
     id: m.id,
@@ -114,6 +138,7 @@ export default async function ProjetDetailPage({
   }));
   const episodes: Episode[] = (episodesRes.data ?? []).map((e) => {
     const episodeMissions = missions.filter((m) => m.episode_id === e.id);
+    const episodeFiles = allFiles.filter((f) => f.episode_id === e.id);
     return {
       id: e.id,
       name: e.name,
@@ -132,6 +157,7 @@ export default async function ProjetDetailPage({
       notes: e.notes,
       mission_count: episodeMissions.length,
       missions: episodeMissions,
+      files: episodeFiles,
     };
   });
 
@@ -197,6 +223,14 @@ export default async function ProjetDetailPage({
             </p>
           ) : null}
         </div>
+
+        <Link
+          href={`/producteur/projets/${project.id}/board`}
+          className="inline-flex h-9 items-center justify-center gap-1.5 self-start rounded-md border border-border bg-secondary/40 px-3 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+        >
+          <Sparkles className="h-4 w-4" />
+          Espace de création
+        </Link>
       </section>
 
       {episodesError ? (

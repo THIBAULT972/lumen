@@ -264,7 +264,7 @@ function MissionCard({
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
-              className="glass-panel border-foreground/10"
+              className="border-foreground/10"
             >
               <DropdownMenuItem onClick={() => setEditOpen(true)}>
                 <Pencil className="mr-2 h-4 w-4" />
@@ -380,7 +380,7 @@ function MissionDialog({
   }
 
   return (
-    <DialogContent className="glass-panel max-h-[90vh] overflow-y-auto border-foreground/10 sm:max-w-lg">
+    <DialogContent className="max-h-[90vh] overflow-y-auto border-foreground/10 sm:max-w-lg">
       <DialogHeader>
         <DialogTitle className="font-heading text-2xl font-light">
           {mode === "create" ? "Mandater un prestataire" : "Modifier la mission"}
@@ -576,7 +576,7 @@ function DeleteMissionDialog({
   }
 
   return (
-    <DialogContent className="glass-panel border-foreground/10 sm:max-w-md">
+    <DialogContent className="border-foreground/10 sm:max-w-md">
       <DialogHeader>
         <DialogTitle className="font-heading text-2xl font-light">
           Supprimer la mission ?
