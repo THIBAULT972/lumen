@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useActionState, useState, useTransition } from "react";
 import {
   Plus,
@@ -19,6 +20,7 @@ import {
   UserPlus,
   Copy,
   Check,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,6 +64,7 @@ import type {
   ClientOption,
   ProducteurOption,
 } from "./page";
+import { AiProjectDialog } from "./ai-project-dialog";
 
 type Kind = "client" | "media";
 
@@ -83,7 +86,9 @@ export function ProjetsManager({
   activeCount: number;
 }) {
   const [addOpen, setAddOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
   const [clientsList, setClientsList] = useState<ClientOption[]>(clients);
+  const router = useRouter();
 
   return (
     <>
@@ -104,13 +109,23 @@ export function ProjetsManager({
         </div>
 
         {!showArchived ? (
-          <Button
-            className="bg-gradient-neon text-white"
-            onClick={() => setAddOpen(true)}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Nouveau projet
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setAiOpen(true)}
+              className="border-primary/40 text-foreground"
+            >
+              <Sparkles className="mr-2 h-4 w-4 text-primary" />
+              Créer avec l'IA
+            </Button>
+            <Button
+              className="bg-gradient-neon text-white"
+              onClick={() => setAddOpen(true)}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Nouveau projet
+            </Button>
+          </div>
         ) : null}
 
         <Dialog open={addOpen} onOpenChange={setAddOpen}>
@@ -120,6 +135,18 @@ export function ProjetsManager({
             currentUserId={currentUserId}
             onClientCreated={(c) => setClientsList((prev) => [c, ...prev])}
             onSuccess={() => setAddOpen(false)}
+          />
+        </Dialog>
+
+        <Dialog open={aiOpen} onOpenChange={setAiOpen}>
+          <AiProjectDialog
+            producteurs={producteurs}
+            clients={clientsList}
+            currentUserId={currentUserId}
+            onSuccess={(projectId) => {
+              setAiOpen(false);
+              router.push(`/producteur/projets/${projectId}`);
+            }}
           />
         </Dialog>
       </div>
