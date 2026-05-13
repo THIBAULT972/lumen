@@ -2,8 +2,6 @@ import { google } from "@ai-sdk/google";
 import { generateObject } from "ai";
 import { z } from "zod";
 
-// Schéma de sortie : on force le LLM à renvoyer exactement cette structure.
-// `describe()` est lu par le modèle comme une instruction supplémentaire.
 const draftSchema = z.object({
   name: z
     .string()
@@ -53,9 +51,11 @@ const draftSchema = z.object({
           ),
       }),
     )
-    .min(2)
+    .min(1)
     .max(8)
-    .describe("Liste d'émissions concrètes (entre 2 et 8)."),
+    .describe(
+      "Liste d'émissions concrètes (au moins 1, idéalement 3 à 6).",
+    ),
   recommendedSkills: z
     .array(z.string())
     .max(8)
@@ -77,7 +77,7 @@ const SYSTEM_PROMPT = `Tu es l'assistant de production de LUMEN, une plateforme 
 
 Le studio travaille principalement en français (et créole occasionnellement), produit des contenus pour la télévision, les réseaux sociaux, et des marques. L'équipe : 3 producteurs (Thibault, Meghane, Anthony) + des prestataires freelance (cameraman, droniste, monteur, photographe, etc.) + parfois des clients tiers.
 
-Quand un producteur te décrit une idée, tu génères un BROUILLON STRUCTURÉ de projet :
+Quand un producteur te décrit une idée — par texte, par PDF, ou les deux — tu génères un BROUILLON STRUCTURÉ de projet :
 - Un nom court (max 80 char) et accrocheur
 - Le type : "client" s'il a explicitement parlé d'un client tiers, sinon "media" (production interne)
 - Une description claire de 2 à 4 phrases
@@ -85,13 +85,31 @@ Quand un producteur te décrit une idée, tu génères un BROUILLON STRUCTURÉ d
 - Les compétences prestataires utiles
 - Quelques notes de prod si pertinent (lieux, équipement spécifique, contraintes)
 
+Si on te fournit un PDF (brief, dossier de prod, présentation), lis-le attentivement (texte ET images) et base ton brouillon dessus. Si l'utilisateur ajoute aussi du texte, c'est une consigne supplémentaire à respecter en plus du contenu du PDF.
+
 Sois concret et pratique. Pense local Martinique quand c'est pertinent. Réponds en français. Si l'utilisateur est vague, fais des choix créatifs solides plutôt que de demander des précisions — il pourra éditer ton brouillon.`;
 
+export type GeneratorInput = {
+  idea: string;
+  /** Optional document attachment (PDF for now). */
+  attachment?: {
+    bytes: Uint8Array;
+    mimeType: string;
+    filename?: string;
+  };
+};
+
 export async function generateProjectDraft(
-  userIdea: string,
+  input: GeneratorInput,
 ): Promise<{ ok: true; draft: ProjectDraft } | { ok: false; error: string }> {
-  if (!userIdea.trim()) {
-    return { ok: false, error: "Décris ton idée pour démarrer." };
+  const trimmedIdea = input.idea.trim();
+  const hasAttachment = !!input.attachment;
+
+  if (!trimmedIdea && !hasAttachment) {
+    return {
+      ok: false,
+      error: "Décris ton idée ou joins un PDF pour démarrer.",
+    };
   }
   if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
     return {
@@ -102,21 +120,78 @@ export async function generateProjectDraft(
   }
 
   try {
+    const userParts: (
+      | { type: "text"; text: string }
+      | { type: "file"; data: Uint8Array; mediaType: string }
+    )[] = [];
+
+    if (trimmedIdea) {
+      userParts.push({ type: "text", text: trimmedIdea });
+    }
+    if (hasAttachment) {
+      userParts.push({
+        type: "file",
+        data: input.attachment!.bytes,
+        mediaType: input.attachment!.mimeType,
+      });
+      if (!trimmedIdea) {
+        userParts.push({
+          type: "text",
+          text:
+            "Analyse ce document et propose un brouillon de projet basé sur son contenu.",
+        });
+      }
+    }
+
     const { object } = await generateObject({
       model: google("gemini-2.5-flash"),
       schema: draftSchema,
       system: SYSTEM_PROMPT,
-      prompt: userIdea,
+      messages: [
+        {
+          role: "user",
+          content: userParts,
+        },
+      ],
     });
     return { ok: true, draft: object };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Erreur inconnue.";
-    // Common rate-limit / quota errors get a friendlier message
+    const lower = msg.toLowerCase();
+
     if (msg.includes("RESOURCE_EXHAUSTED") || msg.includes("429")) {
       return {
         ok: false,
         error:
-          "Quota Google AI atteint (limite gratuite). Réessaie dans 1 minute.",
+          "Quota Google AI atteint (limite gratuite : 1500 requêtes/jour). Réessaie dans 1 minute.",
+      };
+    }
+    if (
+      lower.includes("user location is not supported") ||
+      lower.includes("location is not supported") ||
+      lower.includes("permission_denied")
+    ) {
+      return {
+        ok: false,
+        error:
+          "Google AI bloque ta région (probablement à cause d'un VPN). Désactive le VPN, ou teste cette feature en prod (Vercel) — leurs serveurs ne sont pas bloqués.",
+      };
+    }
+    if (
+      lower.includes("response did not match schema") ||
+      lower.includes("no object generated")
+    ) {
+      return {
+        ok: false,
+        error:
+          "L'IA n'a pas pu structurer ta demande. Sois plus explicite : décris au moins 1-2 idées d'émissions, le ton, et qui regarde.",
+      };
+    }
+    if (lower.includes("payload") || lower.includes("size")) {
+      return {
+        ok: false,
+        error:
+          "Le document est trop volumineux. Essaie un PDF plus léger (<20 Mo).",
       };
     }
     return { ok: false, error: msg };

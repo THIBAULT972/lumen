@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import {
   Sparkles,
   Loader2,
@@ -11,6 +11,9 @@ import {
   Users,
   Video,
   RefreshCcw,
+  FileText,
+  Paperclip,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,10 +36,16 @@ import {
 } from "@/components/ui/select";
 import {
   createProjectFromAiDraft,
+  discardAiPdf,
   generateAiProjectDraft,
+  requestAiPdfUpload,
 } from "./ai-actions";
+import { createClient as createBrowserSupabase } from "@/lib/supabase/client";
 import type { ProjectDraft } from "@/lib/ai/project-generator";
 import type { ClientOption, ProducteurOption } from "./page";
+
+const STORAGE_BUCKET = "files";
+const MAX_PDF_SIZE = 20 * 1024 * 1024; // 20 MB
 
 type Stage =
   | { phase: "idea" }
@@ -63,9 +72,14 @@ export function AiProjectDialog({
 }) {
   const [stage, setStage] = useState<Stage>({ phase: "idea" });
   const [idea, setIdea] = useState("");
+  const [pdf, setPdf] = useState<File | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<
+    "idle" | "uploading" | "analyzing"
+  >("idle");
   const [error, setError] = useState<string | null>(null);
   const [generating, startGenerating] = useTransition();
   const [creating, startCreating] = useTransition();
+  const pdfInputRef = useRef<HTMLInputElement>(null);
 
   // Editable draft state (initialized once we move to the preview phase)
   const [draftEdit, setDraftEdit] = useState<ProjectDraft | null>(null);
@@ -80,7 +94,38 @@ export function AiProjectDialog({
     setError(null);
     startGenerating(async () => {
       setStage({ phase: "generating" });
-      const r = await generateAiProjectDraft(idea);
+
+      let pdfStoragePath: string | undefined;
+
+      // 1. If a PDF is attached, upload it to Supabase Storage first (bypasses
+      //    Next.js server-action body limits).
+      if (pdf) {
+        setUploadStatus("uploading");
+        const init = await requestAiPdfUpload(pdf.name, pdf.size);
+        if (!init.ok) {
+          setError(init.error);
+          setUploadStatus("idle");
+          setStage({ phase: "idea" });
+          return;
+        }
+        const supabase = createBrowserSupabase();
+        const { error: upErr } = await supabase.storage
+          .from(STORAGE_BUCKET)
+          .uploadToSignedUrl(init.storagePath, init.token, pdf);
+        if (upErr) {
+          setError(`Envoi du PDF échoué : ${upErr.message}`);
+          setUploadStatus("idle");
+          setStage({ phase: "idea" });
+          return;
+        }
+        pdfStoragePath = init.storagePath;
+      }
+
+      // 2. Generate. The server downloads the PDF (if any), feeds bytes to
+      //    Gemini, then cleans up the temp file.
+      setUploadStatus("analyzing");
+      const r = await generateAiProjectDraft({ idea, pdfStoragePath });
+      setUploadStatus("idle");
       if (!r.ok) {
         setError(r.error);
         setStage({ phase: "idea" });
@@ -90,6 +135,25 @@ export function AiProjectDialog({
       setStage({ phase: "preview", draft: r.draft });
     });
   }
+
+  function pickPdf(file: File) {
+    if (file.type && file.type !== "application/pdf") {
+      setError("Seuls les fichiers PDF sont acceptés.");
+      return;
+    }
+    if (file.size > MAX_PDF_SIZE) {
+      setError(
+        `PDF trop volumineux (${(file.size / 1_048_576).toFixed(1)} Mo). Max ${MAX_PDF_SIZE / 1_048_576} Mo.`,
+      );
+      return;
+    }
+    setError(null);
+    setPdf(file);
+  }
+
+  // Discard a pending temp PDF on dialog close (best-effort) — not used yet
+  // but kept for the future "close mid-upload" flow.
+  void discardAiPdf;
 
   function create() {
     if (!draftEdit) return;
@@ -139,18 +203,81 @@ export function AiProjectDialog({
         </DialogHeader>
 
         <div className="space-y-3">
-          <Label htmlFor="ai-idea">Ton idée</Label>
+          <Label htmlFor="ai-idea">
+            Ton idée{" "}
+            <span className="text-muted-foreground">(et/ou un PDF)</span>
+          </Label>
           <textarea
             id="ai-idea"
             value={idea}
             onChange={(e) => setIdea(e.target.value)}
-            rows={6}
+            rows={5}
             placeholder="Ex : Une mini-série de 4 épisodes sur des chefs créoles émergents…"
             className="w-full rounded-lg border border-foreground/10 bg-foreground/[0.03] p-3 text-sm placeholder:text-muted-foreground/60 focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-primary/30"
             disabled={generating}
             autoFocus
           />
-          {!idea ? (
+
+          {/* PDF drop zone */}
+          <input
+            ref={pdfInputRef}
+            type="file"
+            accept="application/pdf,.pdf"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) pickPdf(f);
+              e.target.value = "";
+            }}
+          />
+          {pdf ? (
+            <div className="flex items-center gap-2 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2 text-sm">
+              <FileText className="h-4 w-4 text-primary" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium leading-tight">
+                  {pdf.name}
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  {(pdf.size / 1_048_576).toFixed(2)} Mo · sera analysé (texte
+                  + images)
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPdf(null)}
+                disabled={generating}
+                className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
+                aria-label="Retirer le PDF"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : (
+            <div
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                const f = e.dataTransfer.files?.[0];
+                if (f) pickPdf(f);
+              }}
+              className="flex items-center justify-between gap-3 rounded-lg border border-dashed border-border bg-foreground/[0.02] px-3 py-2.5 text-xs text-muted-foreground transition-colors hover:bg-foreground/[0.04]"
+            >
+              <span className="inline-flex items-center gap-1.5">
+                <Paperclip className="h-3.5 w-3.5" />
+                Glisse un PDF ici (brief, dossier de prod, présentation… max 20 Mo)
+              </span>
+              <button
+                type="button"
+                onClick={() => pdfInputRef.current?.click()}
+                disabled={generating}
+                className="rounded-md border border-border bg-foreground/[0.03] px-2 py-1 text-[11px] transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
+              >
+                Choisir
+              </button>
+            </div>
+          )}
+
+          {!idea && !pdf ? (
             <div className="space-y-1.5">
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
                 Quelques exemples
@@ -181,14 +308,16 @@ export function AiProjectDialog({
         <DialogFooter>
           <Button
             type="button"
-            disabled={!idea.trim() || generating}
+            disabled={(!idea.trim() && !pdf) || generating}
             onClick={generate}
             className="bg-gradient-neon text-white"
           >
             {generating ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                L'IA réfléchit…
+                {uploadStatus === "uploading"
+                  ? "Envoi du PDF…"
+                  : "L'IA réfléchit…"}
               </>
             ) : (
               <>
@@ -497,6 +626,7 @@ export function AiProjectDialog({
           onClick={() => {
             setStage({ phase: "idea" });
             setDraftEdit(null);
+            // Keep idea + pdf as-is so the user can iterate quickly
           }}
         >
           <RefreshCcw className="mr-2 h-3.5 w-3.5" />
