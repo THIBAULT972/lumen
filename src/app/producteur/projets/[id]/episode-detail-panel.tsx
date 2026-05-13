@@ -47,9 +47,10 @@ import {
   type EpisodePayload,
   type EpisodeStatus,
 } from "../episode-types";
-import type { Episode, Platform } from "./page";
+import type { Episode, Platform, Skill } from "./page";
 import { statusLabel } from "./status-badge";
 import { PlatformsPicker } from "./platforms-picker";
+import { MissionsSection } from "./missions-section";
 
 const FORMAT_OPTIONS = [
   "Reportage",
@@ -107,6 +108,7 @@ type Props = {
   episode: Episode;
   projectId: string;
   availablePlatforms: Platform[];
+  availableSkills: Skill[];
   fullscreen: boolean;
   onToggleFullscreen: () => void;
   onClose: () => void;
@@ -118,6 +120,7 @@ export const EpisodeDetailPanel = forwardRef<PanelHandle, Props>(
       episode,
       projectId,
       availablePlatforms,
+      availableSkills,
       fullscreen,
       onToggleFullscreen,
       onClose,
@@ -375,6 +378,13 @@ export const EpisodeDetailPanel = forwardRef<PanelHandle, Props>(
                 className="w-full rounded-lg border border-foreground/10 bg-foreground/[0.03] p-3 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
             </FieldRow>
+
+            <MissionsSection
+              episodeId={episode.id}
+              projectId={projectId}
+              missions={episode.missions}
+              skills={availableSkills}
+            />
 
             <FieldRow
               icon={<StickyNote className="h-3.5 w-3.5" />}

@@ -9,6 +9,7 @@ import {
   type EpisodePayload,
   type EpisodeStatus,
 } from "./episode-types";
+import type { MissionPayload } from "./mission-types";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -543,4 +544,145 @@ function parseOptionalTime(
   // HTML <input type="time"> returns "HH:MM" — Postgres accepts that as time.
   if (!/^\d{2}:\d{2}(:\d{2})?$/.test(raw)) return null;
   return raw;
+}
+
+// ============================================================================
+// MISSIONS
+// ============================================================================
+
+/**
+ * Compose a scheduled_at timestamptz from a YYYY-MM-DD date + HH:MM time
+ * (interpreted in America/Martinique, UTC-4 no DST).
+ */
+function composeScheduledAt(
+  dateStr: string,
+  timeStr: string | null,
+): string | null {
+  if (!dateStr) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return null;
+  const time = timeStr && /^\d{2}:\d{2}$/.test(timeStr) ? `${timeStr}:00` : "12:00:00";
+  const dt = new Date(`${dateStr}T${time}-04:00`);
+  if (Number.isNaN(dt.getTime())) return null;
+  return dt.toISOString();
+}
+
+function validateMissionPayload(p: MissionPayload):
+  | { ok: false; error: string }
+  | { ok: true; scheduledAt: string; priceCents: number; durationMinutes: number | null } {
+  if (!p.required_skill_id) {
+    return { ok: false, error: "Choisis la compétence requise." };
+  }
+  if (!p.title?.trim()) {
+    return { ok: false, error: "Titre de mission requis." };
+  }
+  const scheduledAt = composeScheduledAt(p.scheduled_date, p.scheduled_time);
+  if (!scheduledAt) {
+    return { ok: false, error: "Date de tournage requise." };
+  }
+  let durationMinutes: number | null = null;
+  if (p.duration_minutes !== null && p.duration_minutes !== undefined) {
+    const n = Number(p.duration_minutes);
+    if (!Number.isFinite(n) || n < 0 || n > 60 * 24 * 7) {
+      return { ok: false, error: "Durée invalide." };
+    }
+    durationMinutes = Math.round(n);
+  }
+  let priceCents = 0;
+  if (p.price_euros !== null && p.price_euros !== undefined) {
+    const n = Number(p.price_euros);
+    if (!Number.isFinite(n) || n < 0 || n > 1_000_000) {
+      return { ok: false, error: "Prix invalide." };
+    }
+    priceCents = Math.round(n * 100);
+  }
+  return { ok: true, scheduledAt, priceCents, durationMinutes };
+}
+
+export type CreateMissionResult = Result<{ missionId: string }>;
+
+export async function createMission(
+  episodeId: string,
+  projectId: string,
+  payload: MissionPayload,
+): Promise<CreateMissionResult> {
+  const guard = await getProducteur();
+  if (!guard.ok) return guard;
+
+  const v = validateMissionPayload(payload);
+  if (!v.ok) return v;
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("missions")
+    .insert({
+      episode_id: episodeId,
+      required_skill_id: payload.required_skill_id,
+      title: payload.title.trim(),
+      description: payload.description?.trim() || null,
+      location: payload.location?.trim() || null,
+      scheduled_at: v.scheduledAt,
+      duration_minutes: v.durationMinutes,
+      price_cents: v.priceCents,
+      contact_name: payload.contact_name?.trim() || null,
+      contact_phone: payload.contact_phone?.trim() || null,
+      status: "draft",
+      created_by: guard.user.id,
+    })
+    .select("id")
+    .single();
+
+  if (error || !data) {
+    return { ok: false, error: error?.message ?? "Erreur de création." };
+  }
+
+  revalidatePath(`/producteur/projets/${projectId}`);
+  return { ok: true, missionId: data.id };
+}
+
+export async function updateMission(
+  missionId: string,
+  projectId: string,
+  payload: MissionPayload,
+): Promise<Result> {
+  const guard = await getProducteur();
+  if (!guard.ok) return guard;
+
+  const v = validateMissionPayload(payload);
+  if (!v.ok) return v;
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("missions")
+    .update({
+      required_skill_id: payload.required_skill_id,
+      title: payload.title.trim(),
+      description: payload.description?.trim() || null,
+      location: payload.location?.trim() || null,
+      scheduled_at: v.scheduledAt,
+      duration_minutes: v.durationMinutes,
+      price_cents: v.priceCents,
+      contact_name: payload.contact_name?.trim() || null,
+      contact_phone: payload.contact_phone?.trim() || null,
+    })
+    .eq("id", missionId);
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/producteur/projets/${projectId}`);
+  return { ok: true };
+}
+
+export async function deleteMission(
+  missionId: string,
+  projectId: string,
+): Promise<Result> {
+  const guard = await getProducteur();
+  if (!guard.ok) return guard;
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("missions").delete().eq("id", missionId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/producteur/projets/${projectId}`);
+  return { ok: true };
 }

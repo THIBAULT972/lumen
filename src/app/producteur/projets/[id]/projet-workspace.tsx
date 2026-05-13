@@ -43,7 +43,7 @@ import {
   deleteEpisode,
   moveEpisode,
 } from "../actions";
-import type { Episode, Platform } from "./page";
+import type { Episode, Platform, Skill } from "./page";
 import {
   EpisodeDetailPanel,
   type PanelHandle,
@@ -57,10 +57,12 @@ export function ProjetWorkspace({
   projectId,
   episodes,
   availablePlatforms,
+  availableSkills,
 }: {
   projectId: string;
   episodes: Episode[];
   availablePlatforms: Platform[];
+  availableSkills: Skill[];
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
@@ -229,6 +231,7 @@ export function ProjetWorkspace({
             episode={selected}
             projectId={projectId}
             availablePlatforms={availablePlatforms}
+            availableSkills={availableSkills}
             fullscreen={fullscreen}
             onToggleFullscreen={() => setFullscreen(!fullscreen)}
             onClose={() => requestSelect(null)}

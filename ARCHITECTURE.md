@@ -254,7 +254,8 @@ Réinitialisables via `npm run seed` (idempotent).
 | **P1** | ✅ | Auth, schéma BDD complet, proxy de session, 3 dashboards minimaux, seed |
 | **P2.1** | ✅ | Gestion équipe + compétences (côté producteur) |
 | **P2.2** | ✅ | Projets (client/média) + émissions (réorderable) |
-| **P2.3** | ⏳ | Missions + broadcast Uber + désistement+pénalité |
+| **P2.3.a** | ✅ | Missions : création/édition/suppression + UI section dans le panel épisode |
+| **P2.3.b** | ⏳ | Broadcast Uber (bouton "Envoyer aux prestataires") + désistement+pénalité |
 | **P3** | ⏳ | Hubs clients (upload/download fichiers) — Supabase Storage |
 | **P4** | ⏳ | Calendrier + notifications temps réel (Supabase Realtime) |
 | **post-MVP** | ⏳ | PWA, Web Push, WebAuthn, édition texte temps réel (Yjs) |

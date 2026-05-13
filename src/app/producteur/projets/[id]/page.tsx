@@ -4,7 +4,9 @@ import { ArrowLeft, Users, Video } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/server";
 import type { EpisodeStatus } from "../episode-types";
+import type { MissionStatus } from "../mission-types";
 import { ProjetWorkspace } from "./projet-workspace";
+import type { Mission } from "./missions-section";
 
 export type Episode = {
   id: string;
@@ -23,9 +25,11 @@ export type Episode = {
   platforms: string[];
   notes: string | null;
   mission_count: number;
+  missions: Mission[];
 };
 
 export type Platform = { id: string; name: string };
+export type Skill = { id: string; name: string };
 
 export default async function ProjetDetailPage({
   params,
@@ -35,30 +39,42 @@ export default async function ProjetDetailPage({
   const { id } = await params;
   const supabase = await createClient();
 
-  const [projectRes, episodesRes, missionsRes, clientsRes, platformsRes] =
-    await Promise.all([
-      supabase
-        .from("projects")
-        .select("id, name, description, client_id, archived_at")
-        .eq("id", id)
-        .maybeSingle(),
-      supabase
-        .from("episodes")
-        .select(
-          "id, name, description, order_index, status, format, production_date, production_time, duration_minutes, publication_date, location, guests, equipment, platforms, notes",
-        )
-        .eq("project_id", id)
-        .order("order_index", { ascending: true }),
-      supabase.from("missions").select("id, episode_id"),
-      supabase
-        .from("profiles")
-        .select("id, email, first_name, last_name")
-        .eq("role", "client"),
-      supabase
-        .from("platforms")
-        .select("id, name")
-        .order("name", { ascending: true }),
-    ]);
+  const [
+    projectRes,
+    episodesRes,
+    missionsRes,
+    clientsRes,
+    platformsRes,
+    skillsRes,
+  ] = await Promise.all([
+    supabase
+      .from("projects")
+      .select("id, name, description, client_id, archived_at")
+      .eq("id", id)
+      .maybeSingle(),
+    supabase
+      .from("episodes")
+      .select(
+        "id, name, description, order_index, status, format, production_date, production_time, duration_minutes, publication_date, location, guests, equipment, platforms, notes",
+      )
+      .eq("project_id", id)
+      .order("order_index", { ascending: true }),
+    supabase
+      .from("missions")
+      .select(
+        "id, episode_id, required_skill_id, title, description, location, scheduled_at, duration_minutes, price_cents, status, contact_name, contact_phone, accepted_by",
+      )
+      .order("scheduled_at", { ascending: true }),
+    supabase
+      .from("profiles")
+      .select("id, email, first_name, last_name")
+      .eq("role", "client"),
+    supabase
+      .from("platforms")
+      .select("id, name")
+      .order("name", { ascending: true }),
+    supabase.from("skills").select("id, name").order("name"),
+  ]);
 
   if (!projectRes.data) notFound();
   const project = projectRes.data;
@@ -77,27 +93,47 @@ export default async function ProjetDetailPage({
     );
   }
 
-  const missions = missionsRes.data ?? [];
+  const missionsRaw = missionsRes.data ?? [];
   const platforms: Platform[] = platformsRes.data ?? [];
+  const skills: Skill[] = skillsRes.data ?? [];
   const episodesError = episodesRes.error?.message ?? null;
-  const episodes: Episode[] = (episodesRes.data ?? []).map((e) => ({
-    id: e.id,
-    name: e.name,
-    description: e.description,
-    order_index: e.order_index,
-    status: (e.status ?? "idea") as EpisodeStatus,
-    format: e.format,
-    production_date: e.production_date,
-    production_time: e.production_time,
-    duration_minutes: e.duration_minutes,
-    publication_date: e.publication_date,
-    location: e.location,
-    guests: Array.isArray(e.guests) ? e.guests : [],
-    equipment: Array.isArray(e.equipment) ? e.equipment : [],
-    platforms: Array.isArray(e.platforms) ? e.platforms : [],
-    notes: e.notes,
-    mission_count: missions.filter((m) => m.episode_id === e.id).length,
+  const missions: Mission[] = missionsRaw.map((m) => ({
+    id: m.id,
+    episode_id: m.episode_id,
+    required_skill_id: m.required_skill_id,
+    title: m.title,
+    description: m.description,
+    location: m.location,
+    scheduled_at: m.scheduled_at,
+    duration_minutes: m.duration_minutes,
+    price_cents: m.price_cents ?? 0,
+    status: (m.status ?? "draft") as MissionStatus,
+    contact_name: m.contact_name ?? null,
+    contact_phone: m.contact_phone ?? null,
+    accepted_by: m.accepted_by ?? null,
   }));
+  const episodes: Episode[] = (episodesRes.data ?? []).map((e) => {
+    const episodeMissions = missions.filter((m) => m.episode_id === e.id);
+    return {
+      id: e.id,
+      name: e.name,
+      description: e.description,
+      order_index: e.order_index,
+      status: (e.status ?? "idea") as EpisodeStatus,
+      format: e.format,
+      production_date: e.production_date,
+      production_time: e.production_time,
+      duration_minutes: e.duration_minutes,
+      publication_date: e.publication_date,
+      location: e.location,
+      guests: Array.isArray(e.guests) ? e.guests : [],
+      equipment: Array.isArray(e.equipment) ? e.equipment : [],
+      platforms: Array.isArray(e.platforms) ? e.platforms : [],
+      notes: e.notes,
+      mission_count: episodeMissions.length,
+      missions: episodeMissions,
+    };
+  });
 
   const clients = clientsRes.data ?? [];
   const client = project.client_id
@@ -182,6 +218,7 @@ export default async function ProjetDetailPage({
           projectId={project.id}
           episodes={episodes}
           availablePlatforms={platforms}
+          availableSkills={skills}
         />
       )}
     </>
