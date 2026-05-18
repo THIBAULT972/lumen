@@ -228,20 +228,17 @@ export async function generateEpisodeDraft(
     .filter((x): x is string => x !== null)
     .join("\n");
 
-  // Même stratégie que generateProjectDraft : thinking off + fallback 2.0.
+  // 2.0-flash en premier (quota 15 RPM), 2.5-flash en fallback (10 RPM).
+  // maxRetries: 0 pour éviter les 3 tentatives internes du SDK qui crament
+  // le quota gratuit. Break immédiat sur 429.
   const attempts = [
-    {
-      label: "2.5-flash (thinking off)",
-      model: google("gemini-2.5-flash"),
-      providerOptions: GEMINI_NO_THINKING,
-    },
     {
       label: "2.0-flash",
       model: google("gemini-2.0-flash"),
       providerOptions: undefined,
     },
     {
-      label: "2.5-flash (thinking off, 2nd try)",
+      label: "2.5-flash (thinking off)",
       model: google("gemini-2.5-flash"),
       providerOptions: GEMINI_NO_THINKING,
     },
@@ -263,6 +260,7 @@ export async function generateEpisodeDraft(
         ],
         maxOutputTokens: 16_384,
         providerOptions: att.providerOptions,
+        maxRetries: 0,
       });
       if (i > 0) {
         console.warn(
@@ -291,9 +289,13 @@ export async function generateEpisodeDraft(
   const msg = lastError instanceof Error ? lastError.message : "Erreur inconnue.";
   const lower = msg.toLowerCase();
   if (msg.includes("RESOURCE_EXHAUSTED") || msg.includes("429")) {
+    const retryMatch = msg.match(/retry in ([\d.]+)s/i);
+    const seconds = retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : null;
     return {
       ok: false,
-      error: "Quota Google AI atteint. Réessaie dans 1 minute.",
+      error: seconds
+        ? `Quota Gemini atteint (10 req/min en gratuit). Réessaye dans ${seconds} secondes.`
+        : "Quota Gemini atteint (10 req/min en gratuit). Réessaye dans ~1 minute.",
     };
   }
   if (

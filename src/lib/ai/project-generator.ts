@@ -223,23 +223,21 @@ export async function generateProjectDraft(
     }
   }
 
-  // Stratégie de retry avec 2 modèles différents et thinking désactivé.
-  // Gemini 2.5 Flash a un mode "thinking" activé par défaut qui consomme
-  // jusqu'à 24k tokens AVANT de produire la sortie — ça tronque le JSON.
-  // On le désactive explicitement et on fallback sur 2.0 Flash si 2.5 rate.
+  // Quota gratuit Gemini = 10 RPM sur 2.5-flash, 15 RPM sur 2.0-flash. Chaque
+  // appel SDK fait par défaut 3 tentatives internes → on les coupe avec
+  // `maxRetries: 0` pour ne consommer qu'1 unité de quota par essai.
+  //
+  // 2.0-flash en premier car (a) quota plus généreux, (b) pas de thinking
+  // mode → comportement plus prévisible. Fallback 2.5-flash si 2.0 rate.
+  // 2 essais max au total pour ne pas brûler le quota inutilement.
   const attempts = [
-    {
-      label: "2.5-flash (thinking off)",
-      model: google("gemini-2.5-flash"),
-      providerOptions: GEMINI_NO_THINKING,
-    },
     {
       label: "2.0-flash",
       model: google("gemini-2.0-flash"),
       providerOptions: undefined,
     },
     {
-      label: "2.5-flash (thinking off, 2nd try)",
+      label: "2.5-flash (thinking off)",
       model: google("gemini-2.5-flash"),
       providerOptions: GEMINI_NO_THINKING,
     },
@@ -256,6 +254,7 @@ export async function generateProjectDraft(
         messages: [{ role: "user", content: userParts }],
         maxOutputTokens: 16_384,
         providerOptions: att.providerOptions,
+        maxRetries: 0,
       });
       if (i > 0) {
         console.warn(
@@ -269,6 +268,8 @@ export async function generateProjectDraft(
       console.warn(
         `[ai] generateProjectDraft échec avec ${att.label} (essai ${i + 1}/${attempts.length}) : ${msg.slice(0, 400)}`,
       );
+      // Sur 429 ou autre erreur fatale : on stoppe immédiatement, inutile
+      // de cramer le quota avec un retry qui va aussi rate-limit.
       if (isFatalError(msg)) break;
     }
   }
@@ -295,7 +296,12 @@ function humanizeError(e: unknown): string {
   const lower = msg.toLowerCase();
 
   if (msg.includes("RESOURCE_EXHAUSTED") || msg.includes("429")) {
-    return "Quota Google AI atteint (limite gratuite : 1500 requêtes/jour). Réessaie dans 1 minute.";
+    // Essaie d'extraire le délai retry exact "retry in 17.42550157s"
+    const retryMatch = msg.match(/retry in ([\d.]+)s/i);
+    const seconds = retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : null;
+    return seconds
+      ? `Quota Gemini atteint (10 requêtes/min en gratuit). Réessaye dans ${seconds} secondes.`
+      : "Quota Gemini atteint (10 requêtes/min en gratuit). Réessaye dans ~1 minute.";
   }
   if (
     lower.includes("user location is not supported") ||
