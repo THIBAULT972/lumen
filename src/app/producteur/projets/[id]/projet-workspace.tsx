@@ -19,6 +19,7 @@ import {
   Trash2,
   ChevronRight,
   GripVertical,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,6 +49,7 @@ import {
   EpisodeDetailPanel,
   type PanelHandle,
 } from "./episode-detail-panel";
+import { AiEpisodeDialog } from "./ai-episode-dialog";
 import { StatusBadge } from "./status-badge";
 
 const DEFAULT_PANEL_WIDTH = 640;
@@ -67,6 +69,7 @@ export function ProjetWorkspace({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
   const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL_WIDTH);
   const panelRef = useRef<PanelHandle>(null);
 
@@ -160,13 +163,25 @@ export function ProjetWorkspace({
             · {episodes.length}
           </span>
         </h2>
-        <Button
-          className="bg-gradient-neon text-white"
-          onClick={() => setAddOpen(true)}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Nouvelle émission
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setAiOpen(true)}
+            className="border-primary/40 text-foreground"
+          >
+            <Sparkles className="mr-2 h-4 w-4 text-primary" />
+            <span className="hidden sm:inline">Avec l'IA</span>
+            <span className="sm:hidden">IA</span>
+          </Button>
+          <Button
+            className="bg-gradient-neon text-white"
+            onClick={() => setAddOpen(true)}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            <span className="hidden sm:inline">Nouvelle émission</span>
+            <span className="sm:hidden">Émission</span>
+          </Button>
+        </div>
       </div>
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
@@ -174,6 +189,16 @@ export function ProjetWorkspace({
           projectId={projectId}
           onSuccess={(id) => {
             setAddOpen(false);
+            requestSelect(id);
+          }}
+        />
+      </Dialog>
+
+      <Dialog open={aiOpen} onOpenChange={setAiOpen}>
+        <AiEpisodeDialog
+          projectId={projectId}
+          onSuccess={(id) => {
+            setAiOpen(false);
             requestSelect(id);
           }}
         />

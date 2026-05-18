@@ -42,7 +42,7 @@ import {
 } from "./ai-actions";
 import { createClient as createBrowserSupabase } from "@/lib/supabase/client";
 import type { ProjectDraft } from "@/lib/ai/project-generator";
-import { pollinationsUrl } from "@/lib/ai/pollinations";
+import { PollinationsImage } from "@/components/ai/pollinations-image";
 import type { ClientOption, ProducteurOption } from "./page";
 
 const STORAGE_BUCKET = "files";
@@ -421,6 +421,44 @@ export function AiProjectDialog({
           />
         </div>
 
+        {/* Theme — l'angle propre du projet */}
+        <div className="space-y-2">
+          <Label htmlFor="ai-theme">Thème / angle</Label>
+          <textarea
+            id="ai-theme"
+            value={draftEdit.theme}
+            onChange={(e) =>
+              setDraftEdit({ ...draftEdit, theme: e.target.value })
+            }
+            rows={2}
+            placeholder="Ce qui rend le projet unique, l'angle de traitement…"
+            className="w-full rounded-lg border border-foreground/10 bg-foreground/[0.03] p-3 text-sm focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </div>
+
+        {/* Production approach — la façon de tourner */}
+        <div className="space-y-2">
+          <Label htmlFor="ai-approach">
+            Approche de tournage
+            <span className="ml-2 text-[10px] font-normal text-muted-foreground">
+              (où, comment, équipement, style visuel)
+            </span>
+          </Label>
+          <textarea
+            id="ai-approach"
+            value={draftEdit.production_approach}
+            onChange={(e) =>
+              setDraftEdit({
+                ...draftEdit,
+                production_approach: e.target.value,
+              })
+            }
+            rows={4}
+            placeholder="Plateau studio + micros-trottoirs, gimbal en rue, plans serrés en interview…"
+            className="w-full rounded-lg border border-foreground/10 bg-foreground/[0.03] p-3 text-sm focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </div>
+
         {/* Direction artistique (persona + ton + refs + moodboard) */}
         <div className="space-y-3 rounded-xl border border-primary/30 bg-primary/[0.04] p-4">
           <div className="flex items-center gap-2">
@@ -565,38 +603,31 @@ export function AiProjectDialog({
           </div>
         </div>
 
-        {/* Episodes */}
+        {/* Episode ideas — optional. The producer can also add later from
+            the project page (one episode at a time, each fully enriched
+            with script + shots + visuals). */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <Label>
-              Émissions proposées
+              Pistes d'émissions
               <span className="ml-1 text-[11px] normal-case text-muted-foreground">
-                · {draftEdit.episodes.length}
+                · {(draftEdit.episode_ideas ?? []).length}
               </span>
             </Label>
             <Button
               type="button"
               size="sm"
               variant="ghost"
-              onClick={() =>
-                setDraftEdit({
-                  ...draftEdit,
-                  episodes: [
-                    ...draftEdit.episodes,
-                    {
-                      name: "Nouvelle émission",
-                      description: "",
-                      format: "Reportage",
-                      platforms: [],
-                      duration_minutes: 10,
-                      location_suggestion: "",
-                      guests_suggestion: [],
-                      // Champs d'enrichissement laissés undefined :
-                      // ils seront affichés vides dans la card.
-                    },
-                  ],
-                })
-              }
+              onClick={() => {
+                const next = [...(draftEdit.episode_ideas ?? [])];
+                next.push({
+                  name: "Nouvelle émission",
+                  description: "",
+                  format: "Reportage",
+                  platforms: [],
+                });
+                setDraftEdit({ ...draftEdit, episode_ideas: next });
+              }}
               className="h-8 gap-1 text-xs"
             >
               <Plus className="h-3 w-3" />
@@ -604,230 +635,112 @@ export function AiProjectDialog({
             </Button>
           </div>
 
-          <div className="space-y-2">
-            {draftEdit.episodes.map((ep, idx) => (
-              <div
-                key={idx}
-                className="space-y-2 rounded-lg border border-foreground/10 bg-foreground/[0.02] p-3"
-              >
-                <div className="flex items-start gap-2">
-                  <span className="mt-1.5 rounded-md border border-foreground/10 bg-foreground/[0.04] px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-                    #{idx + 1}
-                  </span>
-                  <Input
-                    value={ep.name}
-                    onChange={(e) => {
-                      const next = [...draftEdit.episodes];
-                      next[idx] = { ...ep, name: e.target.value };
-                      setDraftEdit({ ...draftEdit, episodes: next });
-                    }}
-                    className="h-9 flex-1 bg-foreground/[0.03] text-sm font-medium"
-                  />
-                  <Select
-                    value={ep.format}
-                    onValueChange={(v) => {
-                      const next = [...draftEdit.episodes];
-                      next[idx] = {
-                        ...ep,
-                        format: (v ?? "Reportage") as typeof ep.format,
-                      };
-                      setDraftEdit({ ...draftEdit, episodes: next });
-                    }}
-                  >
-                    <SelectTrigger className="h-9 w-36 bg-foreground/[0.03] text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(
-                        [
-                          "Reportage",
-                          "Interview",
-                          "Capsule",
-                          "Documentaire",
-                          "Live",
-                          "Tutoriel",
-                          "Autre",
-                        ] as const
-                      ).map((f) => (
-                        <SelectItem key={f} value={f}>
-                          {f}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const next = draftEdit.episodes.filter(
-                        (_, i) => i !== idx,
-                      );
-                      setDraftEdit({ ...draftEdit, episodes: next });
-                    }}
-                    className="mt-1 rounded-md p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                    aria-label="Supprimer cette émission"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-                <textarea
-                  value={ep.description}
-                  onChange={(e) => {
-                    const next = [...draftEdit.episodes];
-                    next[idx] = { ...ep, description: e.target.value };
-                    setDraftEdit({ ...draftEdit, episodes: next });
-                  }}
-                  rows={2}
-                  placeholder="Synopsis…"
-                  className="w-full rounded-md border border-foreground/10 bg-foreground/[0.03] p-2 text-xs placeholder:text-muted-foreground/60 focus:border-primary/60 focus:outline-none"
-                />
-
-                {/* Meta line : durée + lieu */}
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
-                  {ep.duration_minutes ? (
-                    <span>⏱ {ep.duration_minutes} min</span>
-                  ) : null}
-                  {ep.location_suggestion ? (
-                    <span>📍 {ep.location_suggestion}</span>
-                  ) : null}
-                  {ep.platforms.length > 0
-                    ? ep.platforms.map((p) => (
-                        <Badge key={p} variant="secondary" className="text-[10px]">
-                          {p}
-                        </Badge>
-                      ))
-                    : null}
-                </div>
-
-                {/* Visual prompts → images Pollinations */}
-                {ep.visual_prompts && ep.visual_prompts.length > 0 ? (
-                  <div className="space-y-1.5">
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      Visuels suggérés
-                    </p>
-                    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
-                      {ep.visual_prompts.map((prompt, i) => (
-                        <PollinationsImage
-                          key={i}
-                          prompt={prompt}
-                          aspect="video"
-                          title={prompt}
-                        />
-                      ))}
-                    </div>
+          {(draftEdit.episode_ideas ?? []).length === 0 ? (
+            <div className="rounded-lg border border-dashed border-foreground/15 bg-foreground/[0.02] p-4 text-xs text-muted-foreground">
+              Aucune piste d'émission pour l'instant. Tu pourras ajouter et
+              détailler chaque émission une par une depuis la page du projet
+              (avec son propre appel IA dédié pour script + shot list +
+              visuels). Garde le focus ici sur la structure globale.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {(draftEdit.episode_ideas ?? []).map((ep, idx) => (
+                <div
+                  key={idx}
+                  className="space-y-2 rounded-lg border border-foreground/10 bg-foreground/[0.02] p-3"
+                >
+                  <div className="flex items-start gap-2">
+                    <span className="mt-1.5 rounded-md border border-foreground/10 bg-foreground/[0.04] px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                      #{idx + 1}
+                    </span>
+                    <Input
+                      value={ep.name}
+                      onChange={(e) => {
+                        const list = [...(draftEdit.episode_ideas ?? [])];
+                        list[idx] = { ...ep, name: e.target.value };
+                        setDraftEdit({ ...draftEdit, episode_ideas: list });
+                      }}
+                      className="h-9 flex-1 bg-foreground/[0.03] text-sm font-medium"
+                    />
+                    <Select
+                      value={ep.format}
+                      onValueChange={(v) => {
+                        const list = [...(draftEdit.episode_ideas ?? [])];
+                        list[idx] = {
+                          ...ep,
+                          format: (v ?? "Reportage") as typeof ep.format,
+                        };
+                        setDraftEdit({ ...draftEdit, episode_ideas: list });
+                      }}
+                    >
+                      <SelectTrigger className="h-9 w-36 bg-foreground/[0.03] text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(
+                          [
+                            "Reportage",
+                            "Interview",
+                            "Capsule",
+                            "Documentaire",
+                            "Live",
+                            "Tutoriel",
+                            "Autre",
+                          ] as const
+                        ).map((f) => (
+                          <SelectItem key={f} value={f}>
+                            {f}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const list = (draftEdit.episode_ideas ?? []).filter(
+                          (_, i) => i !== idx,
+                        );
+                        setDraftEdit({ ...draftEdit, episode_ideas: list });
+                      }}
+                      className="mt-1 rounded-md p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                      aria-label="Supprimer cette piste"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
-                ) : null}
-
-                {/* Invités suggérés */}
-                {ep.guests_suggestion && ep.guests_suggestion.length > 0 ? (
-                  <div className="space-y-1">
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      Profils d'intervenants suggérés
-                    </p>
+                  <textarea
+                    value={ep.description}
+                    onChange={(e) => {
+                      const list = [...(draftEdit.episode_ideas ?? [])];
+                      list[idx] = { ...ep, description: e.target.value };
+                      setDraftEdit({ ...draftEdit, episode_ideas: list });
+                    }}
+                    rows={2}
+                    placeholder="Synopsis…"
+                    className="w-full rounded-md border border-foreground/10 bg-foreground/[0.03] p-2 text-xs placeholder:text-muted-foreground/60 focus:border-primary/60 focus:outline-none"
+                  />
+                  {ep.platforms && ep.platforms.length > 0 ? (
                     <div className="flex flex-wrap gap-1">
-                      {ep.guests_suggestion.map((g, i) => (
+                      {ep.platforms.map((p) => (
                         <Badge
-                          key={i}
+                          key={p}
                           variant="secondary"
                           className="text-[10px]"
                         >
-                          {g}
+                          {p}
                         </Badge>
                       ))}
                     </div>
-                  </div>
-                ) : null}
-
-                {/* Script (collapsible) */}
-                {ep.script ? (
-                  <details className="group rounded-md border border-foreground/10 bg-foreground/[0.02] open:bg-foreground/[0.04]">
-                    <summary className="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs font-medium">
-                      <span className="text-muted-foreground transition-transform group-open:rotate-90">
-                        ▸
-                      </span>
-                      Script
-                      <span className="ml-auto text-[10px] text-muted-foreground">
-                        {ep.script.sections?.length ?? 0} section
-                        {(ep.script.sections?.length ?? 0) > 1 ? "s" : ""}
-                      </span>
-                    </summary>
-                    <div className="space-y-3 px-3 pb-3 text-xs">
-                      <div>
-                        <p className="text-[10px] uppercase tracking-wider text-primary">
-                          Hook (10-15 s)
-                        </p>
-                        <p className="mt-1 italic">{ep.script.hook}</p>
-                      </div>
-                      {(ep.script.sections ?? []).map((s, si) => (
-                        <div
-                          key={si}
-                          className="rounded-md border-l-2 border-primary/40 pl-3"
-                        >
-                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                            Section {si + 1}
-                          </p>
-                          <p className="font-medium">{s.heading}</p>
-                          <p className="mt-1 text-muted-foreground">
-                            {s.content}
-                          </p>
-                          {s.b_roll && s.b_roll.length > 0 ? (
-                            <div className="mt-1.5">
-                              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                                B-roll
-                              </p>
-                              <ul className="mt-0.5 space-y-0.5">
-                                {s.b_roll.map((b, bi) => (
-                                  <li
-                                    key={bi}
-                                    className="text-[11px] text-muted-foreground"
-                                  >
-                                    · {b}
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          ) : null}
-                        </div>
-                      ))}
-                      <div>
-                        <p className="text-[10px] uppercase tracking-wider text-primary">
-                          CTA (fin)
-                        </p>
-                        <p className="mt-1 italic">{ep.script.cta}</p>
-                      </div>
-                    </div>
-                  </details>
-                ) : null}
-
-                {/* Shot list (collapsible) */}
-                {ep.shots && ep.shots.length > 0 ? (
-                  <details className="group rounded-md border border-foreground/10 bg-foreground/[0.02] open:bg-foreground/[0.04]">
-                    <summary className="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs font-medium">
-                      <span className="text-muted-foreground transition-transform group-open:rotate-90">
-                        ▸
-                      </span>
-                      Shot list
-                      <span className="ml-auto text-[10px] text-muted-foreground">
-                        {ep.shots.length} plan{ep.shots.length > 1 ? "s" : ""}
-                      </span>
-                    </summary>
-                    <ul className="space-y-1.5 px-3 pb-3 text-xs">
-                      {ep.shots.map((s, si) => (
-                        <li
-                          key={si}
-                          className="flex items-start gap-2 rounded-md bg-foreground/[0.02] px-2 py-1.5"
-                        >
-                          <span className="shrink-0 rounded-full border border-foreground/15 bg-foreground/[0.04] px-2 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
-                            {s.type}
-                          </span>
-                          <span className="min-w-0 flex-1">{s.description}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                ) : null}
-              </div>
-            ))}
-          </div>
+                  ) : null}
+                </div>
+              ))}
+              <p className="text-[10px] text-muted-foreground">
+                Ces pistes seront créées comme émissions à l'état « idée ». Tu
+                pourras les enrichir individuellement avec l'IA (script, shot
+                list, visuels) depuis la page du projet.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Skills hint */}
@@ -899,64 +812,6 @@ export function AiProjectDialog({
         </Button>
       </DialogFooter>
     </DialogContent>
-  );
-}
-
-/**
- * Petite vignette d'image générée par Pollinations (gratuit, sans clé).
- * Lazy-loaded ; affiche un skeleton tant que l'image n'est pas chargée.
- * Au clic, ouvre l'image en grand dans un nouvel onglet.
- */
-function PollinationsImage({
-  prompt,
-  aspect = "video",
-  title,
-}: {
-  prompt: string;
-  aspect?: "square" | "video";
-  title?: string;
-}) {
-  const [loaded, setLoaded] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const size = aspect === "square" ? { w: 768, h: 768 } : { w: 1024, h: 576 };
-  const src = pollinationsUrl(prompt, {
-    width: size.w,
-    height: size.h,
-  });
-  const ratio = aspect === "square" ? "aspect-square" : "aspect-video";
-
-  if (failed) {
-    return (
-      <div
-        className={`${ratio} flex items-center justify-center rounded-md border border-dashed border-foreground/15 bg-foreground/[0.02] p-2 text-center text-[10px] text-muted-foreground`}
-        title={title}
-      >
-        Génération indispo
-      </div>
-    );
-  }
-
-  return (
-    <a
-      href={src}
-      target="_blank"
-      rel="noopener"
-      title={title}
-      className={`${ratio} group relative block overflow-hidden rounded-md border border-foreground/10 bg-foreground/[0.04] transition-transform hover:scale-[1.02]`}
-    >
-      {!loaded ? (
-        <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-foreground/[0.05] to-foreground/[0.02]" />
-      ) : null}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={src}
-        alt={title ?? "Generated visual"}
-        loading="lazy"
-        onLoad={() => setLoaded(true)}
-        onError={() => setFailed(true)}
-        className={`h-full w-full object-cover transition-opacity duration-500 ${loaded ? "opacity-100" : "opacity-0"}`}
-      />
-    </a>
   );
 }
 
