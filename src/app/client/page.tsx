@@ -131,50 +131,22 @@ export default async function ClientPage() {
 
   return (
     <DashboardShell role="Client" userName={displayName}>
-      <section className="mb-10">
-        <p className="text-[11px] uppercase tracking-[0.32em] text-muted-foreground">
+      <section className="mb-5 sm:mb-10">
+        <p className="text-[10px] uppercase tracking-[0.32em] text-muted-foreground sm:text-[11px]">
           Hub · Espace client
         </p>
-        <h1 className="mt-3 font-heading text-3xl font-light tracking-tight sm:text-4xl">
+        <h1 className="mt-2 font-heading text-2xl font-light tracking-tight sm:mt-3 sm:text-4xl">
           Bonjour, <span className="text-gradient-neon">{displayName}</span>.
         </h1>
-        <p className="mt-2 max-w-xl text-sm text-muted-foreground">
+        <p className="mt-1.5 hidden max-w-xl text-sm text-muted-foreground sm:mt-2 sm:block">
           Suis l'avancement de tes productions et récupère tes livrables ici.
         </p>
       </section>
 
-      <section className="mb-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          icon={FolderOpen}
-          label="Projets en cours"
-          value={String(projectsList.length)}
-        />
-        <StatCard
-          icon={Video}
-          label="Émissions planifiées"
-          value={String(totalEpisodes)}
-        />
-        <StatCard
-          icon={Download}
-          label="Livrables"
-          value={String(deliverables.length)}
-        />
-        <StatCard
-          icon={FileText}
-          label="À régler"
-          value={eurosFromCents(unpaidTtc)}
-          hint={
-            invoices.length > 0
-              ? `${invoices.length} facture${invoices.length > 1 ? "s" : ""}`
-              : undefined
-          }
-        />
-      </section>
-
-      {/* INVOICES */}
+      {/* INVOICES — en premier sur mobile : action prioritaire */}
       {invoices.length > 0 ? (
-        <section className="mb-10 space-y-3">
-          <h2 className="font-heading text-xl font-light tracking-wide">
+        <section className="mb-6 space-y-3 sm:mb-10">
+          <h2 className="font-heading text-lg font-light tracking-wide sm:text-xl">
             Factures
           </h2>
           <ul className="space-y-2">
@@ -239,13 +211,13 @@ export default async function ClientPage() {
 
       {/* DELIVERABLES — videos, exports, briefs… */}
       {deliverables.length > 0 ? (
-        <section className="mb-10 space-y-4">
-          <h2 className="font-heading text-xl font-light tracking-wide">
+        <section className="mb-6 space-y-3 sm:mb-10 sm:space-y-4">
+          <h2 className="font-heading text-lg font-light tracking-wide sm:text-xl">
             Livrables à télécharger
           </h2>
           {Array.from(deliverablesByProject.entries()).map(([pid, files]) => (
-            <div key={pid} className="glass-panel rounded-2xl p-5">
-              <p className="mb-3 text-[11px] uppercase tracking-wider text-muted-foreground">
+            <div key={pid} className="glass-panel rounded-xl p-3 sm:rounded-2xl sm:p-5">
+              <p className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground sm:mb-3 sm:text-[11px]">
                 Projet ·{" "}
                 <span className="text-foreground">
                   {projectNameById.get(pid) ?? "Sans projet"}
@@ -261,6 +233,35 @@ export default async function ClientPage() {
         </section>
       ) : null}
 
+      {/* STATS — récap, après les actions prioritaires */}
+      <section className="mb-6 grid grid-cols-2 gap-2.5 sm:mb-10 sm:gap-4 lg:grid-cols-4">
+        <StatCard
+          icon={FolderOpen}
+          label="Projets en cours"
+          value={String(projectsList.length)}
+        />
+        <StatCard
+          icon={Video}
+          label="Émissions planifiées"
+          value={String(totalEpisodes)}
+        />
+        <StatCard
+          icon={Download}
+          label="Livrables"
+          value={String(deliverables.length)}
+        />
+        <StatCard
+          icon={FileText}
+          label="À régler"
+          value={eurosFromCents(unpaidTtc)}
+          hint={
+            invoices.length > 0
+              ? `${invoices.length} facture${invoices.length > 1 ? "s" : ""}`
+              : undefined
+          }
+        />
+      </section>
+
       {/* PROJECTS — overview of upcoming production */}
       {projectsList.length === 0 ? (
         <div className="glass-panel rounded-2xl p-10 text-center">
@@ -274,13 +275,18 @@ export default async function ClientPage() {
           </p>
         </div>
       ) : (
-        <section className="space-y-4">
-          <h2 className="font-heading text-xl font-light tracking-wide">
+        <section className="space-y-3 sm:space-y-4">
+          <h2 className="font-heading text-lg font-light tracking-wide sm:text-xl">
             Tes projets
           </h2>
           {projectsList.map((p) => (
-            <div key={p.id} className="glass-panel rounded-2xl p-5">
-              <h3 className="font-heading text-lg font-medium">{p.name}</h3>
+            <div
+              key={p.id}
+              className="glass-panel rounded-xl p-3 sm:rounded-2xl sm:p-5"
+            >
+              <h3 className="font-heading text-base font-medium sm:text-lg">
+                {p.name}
+              </h3>
               {p.description ? (
                 <p className="mt-1 text-sm text-muted-foreground">
                   {p.description}
