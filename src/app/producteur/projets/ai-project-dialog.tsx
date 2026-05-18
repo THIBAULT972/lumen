@@ -318,7 +318,7 @@ export function AiProjectDialog({
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 {uploadStatus === "uploading"
                   ? "Envoi du PDF…"
-                  : "L'IA réfléchit…"}
+                  : "Gemini structure et détaille… (~30 s)"}
               </>
             ) : (
               <>
@@ -588,15 +588,11 @@ export function AiProjectDialog({
                       description: "",
                       format: "Reportage",
                       platforms: [],
-                      script: {
-                        hook: "",
-                        sections: [
-                          { heading: "Section 1", content: "" },
-                        ],
-                        cta: "",
-                      },
-                      shots: [],
-                      visual_prompts: [],
+                      duration_minutes: 10,
+                      location_suggestion: "",
+                      guests_suggestion: [],
+                      // Champs d'enrichissement laissés undefined :
+                      // ils seront affichés vides dans la card.
                     },
                   ],
                 })

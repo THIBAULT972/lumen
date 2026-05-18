@@ -3,8 +3,20 @@ import { generateObject } from "ai";
 import { z } from "zod";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sub-schemas
+// Stratégie en 2 phases pour éviter la saturation de Gemini Flash :
+//   Phase 1 — "Skeleton" : génère le projet + 3-5 émissions BASIQUES
+//             (name + synopsis + format + plateformes + meta) + moodboard.
+//   Phase 2 — "Enrichment" : pour CHAQUE émission, un appel dédié sort
+//             le script structuré + shot list + visual_prompts.
+//
+// Avantages :
+//   - Chaque appel a son propre budget tokens → pas de troncature.
+//   - Les champs riches deviennent OBLIGATOIRES dans leur schéma d'appel
+//     dédié → on a la garantie d'avoir du contenu, pas du vide.
+//   - Parallélisation des enrichments → 5 émissions ≈ 1 émission en latence.
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ── Sub-schemas (réutilisés par phase 2) ────────────────────────────────────
 
 const scriptSectionSchema = z.object({
   heading: z
@@ -22,7 +34,7 @@ const scriptSectionSchema = z.object({
     .max(5)
     .optional()
     .describe(
-      "Descriptions courtes des plans d'illustration (b-roll) qui accompagnent cette section. Ex: 'gros plan sur les mains du chef en train de remuer'.",
+      "Descriptions courtes des plans b-roll qui accompagnent cette section.",
     ),
 });
 
@@ -31,21 +43,17 @@ const scriptSchema = z.object({
     .string()
     .max(280)
     .describe(
-      "Accroche des 10-15 premières secondes : ce qui capte l'attention au tout début (question, scène choc, citation).",
+      "Accroche des 10-15 premières secondes : ce qui capte l'attention.",
     ),
   sections: z
     .array(scriptSectionSchema)
-    .min(1)
-    .max(8)
-    .describe(
-      "Découpage du contenu en sections séquentielles. 3 à 6 sections recommandé (mais 1 minimum si c'est une capsule très courte).",
-    ),
+    .min(3)
+    .max(6)
+    .describe("Découpage en 3 à 6 sections séquentielles."),
   cta: z
     .string()
     .max(200)
-    .describe(
-      "Call-to-action final : sur quoi l'épisode se termine, quelle action est demandée au spectateur (s'abonner, partager, suivre la suite).",
-    ),
+    .describe("Call-to-action final : ce qu'on demande au spectateur."),
 });
 
 const shotSchema = z.object({
@@ -65,156 +73,112 @@ const shotSchema = z.object({
       "Slow motion",
       "Interview cadré",
     ])
-    .describe("Type de plan, dans le vocabulaire ciné/vidéo standard."),
+    .describe("Type de plan, vocabulaire ciné/vidéo standard."),
   description: z
     .string()
     .max(200)
     .describe(
-      "Ce qui est filmé concrètement. Sois précis : sujet, action, ambiance lumineuse.",
+      "Ce qui est filmé concrètement : sujet, action, ambiance lumineuse.",
     ),
 });
 
-const episodeSchema = z.object({
-  name: z
-    .string()
-    .max(80)
-    .describe("Titre de l'émission (ex: 'Épisode 1 — Sainte-Anne')"),
+// ── Phase 1 schemas — squelette du projet ──────────────────────────────────
+
+const skeletonEpisodeSchema = z.object({
+  name: z.string().max(80).describe("Titre de l'émission."),
   description: z
     .string()
     .max(280)
-    .describe("Synopsis en 1 à 2 phrases — l'essentiel de l'épisode."),
-  format: z
-    .enum([
-      "Reportage",
-      "Interview",
-      "Capsule",
-      "Documentaire",
-      "Live",
-      "Tutoriel",
-      "Autre",
-    ])
-    .describe("Format de production."),
+    .describe("Synopsis en 1 à 2 phrases."),
+  format: z.enum([
+    "Reportage",
+    "Interview",
+    "Capsule",
+    "Documentaire",
+    "Live",
+    "Tutoriel",
+    "Autre",
+  ]),
   platforms: z
     .array(z.string().max(40))
     .max(5)
     .describe(
       "Plateformes de diffusion suggérées (YouTube, Instagram, TikTok, TF1, France 3, etc.).",
     ),
-  // ── New enriched fields ──────────────────────────────────────────────────
   duration_minutes: z
     .number()
     .int()
     .min(1)
     .max(120)
-    .optional()
     .describe(
-      "Durée estimée du contenu fini en minutes (capsule courte = 1-3 min, capsule longue = 5-10 min, reportage = 10-25 min, documentaire = 25-60 min).",
+      "Durée estimée du contenu fini en minutes (capsule = 1-3 min, magazine TV = 10-25 min, doc = 25-60 min).",
     ),
   location_suggestion: z
     .string()
     .max(140)
-    .optional()
     .describe(
       "Lieu de tournage suggéré (un seul, le plus pertinent). Pense local Martinique quand applicable.",
     ),
   guests_suggestion: z
     .array(z.string().max(80))
+    .min(1)
     .max(6)
-    .optional()
     .describe(
-      "Profils d'intervenants suggérés (pas des noms réels — des descriptions de profil : 'chef cuisinier créole 30-40 ans', 'historien spécialiste de l'esclavage').",
-    ),
-  script: scriptSchema
-    .optional()
-    .describe(
-      "Script structuré : hook d'ouverture, sections séquentielles avec dialogues/contenu, call-to-action de fin. À fournir si tu as assez de matière, sinon omet.",
-    ),
-  shots: z
-    .array(shotSchema)
-    .max(12)
-    .optional()
-    .describe(
-      "Shot list : 4 à 10 plans clés à capturer pour cet épisode. Mix de types pour avoir de la variété au montage. À fournir si tu as assez de matière.",
-    ),
-  visual_prompts: z
-    .array(z.string().max(200))
-    .max(4)
-    .optional()
-    .describe(
-      "Prompts EN ANGLAIS pour générer des images d'illustration. Style cinématographique riche en détails (couleurs, lumière, angle, ambiance). Ex: 'cinematic shot of a Caribbean chef plating a colorful seafood dish, warm golden hour light, shallow depth of field, 35mm film aesthetic'. 2 à 4 prompts si tu en proposes.",
+      "Profils d'intervenants suggérés (descriptions de profil, pas de noms réels).",
     ),
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Top-level schema
-// ─────────────────────────────────────────────────────────────────────────────
-
-const draftSchema = z.object({
+const skeletonSchema = z.object({
   name: z
     .string()
     .min(2)
     .max(80)
-    .describe(
-      "Nom court et accrocheur du projet (max 80 caractères). Ex: 'Histwa', 'Cash Culte S2'.",
-    ),
+    .describe("Nom court et accrocheur du projet (max 80 caractères)."),
   kind: z
     .enum(["client", "media"])
     .describe(
-      "'client' si l'utilisateur a clairement mentionné qu'il y a un client tiers à livrer, sinon 'media' (production interne du studio).",
+      "'client' si l'utilisateur a mentionné un client tiers, sinon 'media'.",
     ),
-  description: z
-    .string()
-    .max(500)
-    .describe(
-      "Description du projet en 2 à 4 phrases, claire et orientée prod (le ton, l'angle, la cible).",
-    ),
-  // ── New project-level enrichments (best-effort, peuvent être omis) ──────
+  description: z.string().max(500).describe("Description en 2-4 phrases."),
   target_audience: z
     .string()
     .max(200)
-    .optional()
-    .describe(
-      "Persona cible : âge, intérêts, plateforme principale, contexte. 1-2 phrases.",
-    ),
+    .describe("Persona cible : âge, intérêts, plateforme principale."),
   tone: z
     .string()
     .max(140)
-    .optional()
-    .describe(
-      "Ton éditorial : intimiste / punchy / contemplatif / didactique / fun / premium / etc. Mots-clés courts.",
-    ),
+    .describe("Ton éditorial : 3-5 mots-clés stylistiques."),
   moodboard_prompts: z
     .array(z.string().max(200))
+    .min(3)
     .max(5)
-    .optional()
     .describe(
-      "Prompts EN ANGLAIS pour générer 3-5 images de moodboard représentant l'ambiance visuelle du projet. Style cinématographique riche : couleurs dominantes, lumière, textures, références implicites. Ex: 'cinematic moodboard, sun-drenched Caribbean coastline at dusk, terracotta and indigo palette, 35mm film grain, atmospheric haze'.",
+      "Prompts EN ANGLAIS pour 3-5 images de moodboard. Cinématographique riche : couleurs, lumière, textures, références implicites. Ex: 'cinematic moodboard, sun-drenched Caribbean coastline at dusk, terracotta and indigo palette, 35mm film grain'.",
     ),
   production_tips: z
     .array(z.string().max(180))
+    .min(2)
     .max(6)
-    .optional()
     .describe(
-      "Conseils prod actionnables : équipement spécifique, choix de lieu, timing optimal, contraintes à anticiper.",
+      "Conseils prod actionnables : équipement, lieu, timing, contraintes.",
     ),
   inspiration_references: z
     .array(z.string().max(120))
-    .max(4)
-    .optional()
-    .describe(
-      "Références d'inspiration concrètes : 'style Vice News', 'photographie type Annie Leibovitz', 'montage rythmique façon Jakob Owens'. Pas plus de 4.",
-    ),
-  // ── Episodes ─────────────────────────────────────────────────────────────
-  episodes: z
-    .array(episodeSchema)
     .min(1)
+    .max(4)
+    .describe(
+      "Références d'inspiration concrètes (ex: 'style Vice News', 'photographie Annie Leibovitz').",
+    ),
+  episodes: z
+    .array(skeletonEpisodeSchema)
+    .min(3)
     .max(6)
     .describe(
-      "Liste d'émissions détaillées (au moins 1, idéalement 3 à 5). Chaque émission a son propre script + shot list + visual prompts.",
+      "3 à 6 émissions COHÉRENTES entre elles : si l'utilisateur dit 'hebdomadaire', propose plusieurs sujets traités sur 3-5 semaines. Pas de doublon, chacune doit avoir un angle propre.",
     ),
-  // ── Wrap-up ──────────────────────────────────────────────────────────────
   recommendedSkills: z
     .array(z.string().max(40))
+    .min(2)
     .max(8)
     .describe(
       "Compétences prestataires recommandées (ex: 'Droniste', 'Cadreur 4K', 'Monteur', 'Photographe').",
@@ -223,59 +187,96 @@ const draftSchema = z.object({
     .string()
     .max(400)
     .optional()
+    .describe("Conseils additionnels si pertinent."),
+});
+
+type Skeleton = z.infer<typeof skeletonSchema>;
+
+// ── Phase 2 schema — enrichment d'un seul épisode ──────────────────────────
+
+const enrichmentSchema = z.object({
+  script: scriptSchema.describe(
+    "Script structuré complet pour cet épisode.",
+  ),
+  shots: z
+    .array(shotSchema)
+    .min(5)
+    .max(10)
     .describe(
-      "Conseils additionnels au producteur (logistique, contraintes, idées créatives non couvertes ailleurs).",
+      "Shot list : 5 à 10 plans clés. VARIE les types (mix de plans larges, gros plans, drone, time-lapse) pour avoir du rythme au montage.",
+    ),
+  visual_prompts: z
+    .array(z.string().max(200))
+    .min(3)
+    .max(4)
+    .describe(
+      "3 à 4 prompts EN ANGLAIS pour générer des images d'illustration de cet épisode. Style cinématographique avec détails visuels précis (couleurs, lumière, focale, ambiance). Ex: 'cinematic shot of a young Caribbean politician at a town hall meeting, dramatic backlight from windows, shallow depth of field, documentary style, 35mm film aesthetic'.",
     ),
 });
 
-export type ProjectDraft = z.infer<typeof draftSchema>;
-export type EpisodeDraft = z.infer<typeof episodeSchema>;
+// ─────────────────────────────────────────────────────────────────────────────
+// Final export types — ce que la UI consomme
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type EpisodeDraft = z.infer<typeof skeletonEpisodeSchema> &
+  Partial<z.infer<typeof enrichmentSchema>>;
+
+export type ProjectDraft = Omit<Skeleton, "episodes"> & {
+  episodes: EpisodeDraft[];
+};
+
 export type ScriptDraft = z.infer<typeof scriptSchema>;
 export type ShotDraft = z.infer<typeof shotSchema>;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// System prompt
+// System prompts (un par phase)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `Tu es l'assistant créatif de LUMEN, studio de production audiovisuelle basé en Martinique.
+const SKELETON_SYSTEM_PROMPT = `Tu es l'assistant créatif de LUMEN, studio de production audiovisuelle basé en Martinique.
 
-L'équipe : 3 producteurs (Thibault, Meghane, Anthony) + des prestataires freelance (cameraman, droniste, monteur, photographe) + parfois des clients tiers. Production en français/créole, contenus pour TV / réseaux sociaux / marques.
+L'équipe : 3 producteurs (Thibault, Meghane, Anthony) + des prestataires freelance + parfois des clients tiers. Production en français/créole, contenus pour TV / réseaux sociaux / marques.
 
-Quand un producteur te décrit une idée (texte, PDF, ou les deux), tu génères un BROUILLON DE PROJET le plus complet possible compte tenu du contexte fourni.
+À partir d'une idée (texte ou PDF), tu PROPOSES UN SQUELETTE DE PROJET RICHE :
+- Nom court, accrocheur, prononçable.
+- Type : 'client' si client tiers explicite, sinon 'media'.
+- Description claire (2-4 phrases).
+- Persona cible précis.
+- Ton éditorial en 3-5 mots-clés.
+- 3 à 5 moodboard_prompts EN ANGLAIS, cinématographiques, riches (couleurs, lumière, focale, références implicites).
+- 2 à 5 conseils prod actionnables.
+- 1 à 4 références d'inspiration concrètes.
+- **3 à 5 ÉMISSIONS COHÉRENTES** : même si l'utilisateur dit "une émission hebdomadaire", propose 3-5 sujets différents traités dans le format de cette émission (chaque épisode est un sujet/angle distinct). Si l'utilisateur dit explicitement "1 seule émission", tu peux n'en proposer qu'une, mais sinon vise 3-5.
+- Compétences prestataires utiles.
 
-## Champs OBLIGATOIRES
-- name : nom court (max 80 char), accrocheur, prononçable.
-- kind : 'client' si client tiers explicite, sinon 'media' (production interne).
-- description : 2-4 phrases, ton concret prod.
-- episodes : au moins 1 émission avec name, description, format, platforms (vide si non précisé).
-- recommendedSkills : au moins une compétence prestataire utile (vide [] si vraiment rien).
+Pour chaque émission, tu donnes : name, synopsis, format, plateformes, durée estimée, lieu suggéré, profils d'intervenants (descriptions, pas de noms réels).
 
-## Champs RECOMMANDÉS (remplis-les si tu as la matière)
-Niveau projet :
-- target_audience : persona en 1-2 phrases.
-- tone : 3-5 mots-clés stylistiques.
-- moodboard_prompts : 3-5 prompts EN ANGLAIS cinématographiques pour images d'ambiance.
-- production_tips : 3-5 conseils prod actionnables.
-- inspiration_references : 2-4 réfs ciné/photo concrètes.
+⚠️ NE GÉNÈRE PAS de script, ni de shot list, ni de visual prompts par épisode. Ça sera fait dans un appel séparé.
 
-Niveau épisode :
-- duration_minutes, location_suggestion, guests_suggestion.
-- script structuré : hook + 2-6 sections (avec b-roll si tu veux) + cta.
-- shots : 4-10 plans dans le vocabulaire ciné.
-- visual_prompts : 2-4 prompts EN ANGLAIS pour images de cet épisode.
+Règles d'or :
+- Sois CONCRET. Pas de "à définir".
+- Pense local Martinique quand pertinent (lieux, culture, politique, histoire, langue).
+- visual_prompts et moodboard_prompts EN ANGLAIS — style cinéma.
+- Réponds en français pour le reste.
+- Si un PDF est fourni, lis-le attentivement et respecte ses contraintes.`;
 
-## Stratégie selon la richesse du brief
-- **Brief très court (1-2 phrases)** : remplis les OBLIGATOIRES correctement, et fais au moins le moodboard + persona + ton. Pour le script/shots/visual_prompts, propose-les si tu peux raisonner dessus, sinon omet ces champs (ils sont optionnels). Mieux vaut omettre que d'inventer du flou.
-- **Brief moyen (un paragraphe)** : remplis tout, en restant cohérent avec le contexte.
-- **Brief riche (long texte ou PDF)** : sors un quasi-pitch deck, ultra-concret.
+const ENRICH_SYSTEM_PROMPT = `Tu es l'assistant créatif de LUMEN, studio de production audiovisuelle basé en Martinique.
 
-## Règles d'or
-- Sois CONCRET. Pas de "à définir", pas de "à creuser".
-- Pense local Martinique quand pertinent (lieux, culture, langue, cuisine, histoire, politique).
-- visual_prompts et moodboard_prompts sont EN ANGLAIS — c'est ce qui marche le mieux avec les générateurs d'images. Style cinéma : lumière, palette, focale, grain.
-- Réponds en français pour tout le reste.
-- Si l'utilisateur fournit un PDF, lis-le attentivement et respecte ses contraintes spécifiques.
-- IMPORTANT : ne te bloque jamais sur une contrainte impossible. Si tu ne peux pas générer 3 moodboard_prompts cohérents, omets le champ entier plutôt que de mettre du remplissage.`;
+On te donne UNE émission spécifique d'un projet plus large (avec le contexte du projet + le ton + l'audience). Tu en sors :
+
+1. **SCRIPT STRUCTURÉ** :
+   - Hook : 10-15 premières secondes, ce qui capte l'attention (question, scène choc, statistique, citation).
+   - 3 à 6 sections séquentielles : titre court + contenu détaillé (3-8 phrases, du concret : ce qui est dit/montré, dialogues clés, transitions). Optionnel : 2-4 plans b-roll par section.
+   - CTA de fin : ce qu'on demande au spectateur.
+
+2. **SHOT LIST** : 5 à 10 plans clés à capturer. Mix de types (plans larges, gros plans, drone, time-lapse, slow motion, plans séquence) pour avoir du rythme au montage. Pour chaque plan : type + description concrète (sujet, action, lumière).
+
+3. **VISUAL PROMPTS EN ANGLAIS** : 3-4 prompts cinématographiques pour générer des images d'illustration de CET épisode. Détails précis : couleurs, lumière, focale (35mm, 50mm), profondeur de champ, grain, ambiance. Pas de "a video about politics" — quelque chose comme "cinematic medium shot of a young Caribbean man speaking passionately into a microphone at a town hall meeting, late afternoon sun streaming through windows, shallow depth of field, documentary style, 35mm film aesthetic".
+
+Règles d'or :
+- Sois ULTRA-CONCRET. Le producteur doit pouvoir lire ton output et démarrer le tournage demain.
+- Reste cohérent avec le projet global (ton, audience, plateformes).
+- visual_prompts EN ANGLAIS, style cinéma.
+- Réponds en français pour le reste.`;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Entry point
@@ -311,138 +312,200 @@ export async function generateProjectDraft(
     };
   }
 
+  // ─── Phase 1 : génère le squelette ────────────────────────────────────────
+  const skeletonResult = await generateSkeleton(input);
+  if (!skeletonResult.ok) return skeletonResult;
+  const skeleton = skeletonResult.skeleton;
+
+  // ─── Phase 2 : enrichit chaque épisode en parallèle ──────────────────────
+  // On utilise allSettled pour ne pas tout perdre si un seul épisode rate.
+  const enrichments = await Promise.allSettled(
+    skeleton.episodes.map((ep) => enrichEpisode(skeleton, ep)),
+  );
+
+  const enrichedEpisodes: EpisodeDraft[] = skeleton.episodes.map(
+    (ep, idx) => {
+      const r = enrichments[idx];
+      if (r.status === "fulfilled" && r.value.ok) {
+        return { ...ep, ...r.value.enrichment };
+      }
+      // Si l'enrichissement a raté pour cet épisode, on renvoie au moins
+      // le squelette de l'épisode (la UI affichera les bases).
+      const reason =
+        r.status === "rejected"
+          ? r.reason instanceof Error
+            ? r.reason.message
+            : String(r.reason)
+          : "ok" in r.value && !r.value.ok
+            ? r.value.error
+            : "inconnu";
+      console.warn(
+        `[ai] enrichissement épisode "${ep.name}" raté : ${String(reason).slice(0, 200)}`,
+      );
+      return ep;
+    },
+  );
+
+  return {
+    ok: true,
+    draft: {
+      ...skeleton,
+      episodes: enrichedEpisodes,
+    },
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 1 — Skeleton
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function generateSkeleton(
+  input: GeneratorInput,
+): Promise<{ ok: true; skeleton: Skeleton } | { ok: false; error: string }> {
   const userParts: (
     | { type: "text"; text: string }
     | { type: "file"; data: Uint8Array; mediaType: string }
   )[] = [];
 
-  if (trimmedIdea) {
-    userParts.push({ type: "text", text: trimmedIdea });
+  if (input.idea.trim()) {
+    userParts.push({ type: "text", text: input.idea.trim() });
   }
-  if (hasAttachment) {
+  if (input.attachment) {
     userParts.push({
       type: "file",
-      data: input.attachment!.bytes,
-      mediaType: input.attachment!.mimeType,
+      data: input.attachment.bytes,
+      mediaType: input.attachment.mimeType,
     });
-    if (!trimmedIdea) {
+    if (!input.idea.trim()) {
       userParts.push({
         type: "text",
         text:
-          "Analyse ce document et propose un brouillon de projet basé sur son contenu.",
+          "Analyse ce document et propose un squelette de projet basé sur son contenu.",
       });
     }
   }
 
-  /**
-   * Tente la génération. Gemini Flash est non-déterministe et notre schéma
-   * est riche → on s'autorise jusqu'à 3 essais avant d'abandonner. Entre
-   * chaque retry on ajoute une consigne de plus en plus stricte sur la
-   * concision pour éviter la troncature de sortie.
-   */
-  const attempts: { hint: string }[] = [
-    { hint: "" },
-    { hint: "Reste concis sur les sections optionnelles (script, shots, visual_prompts) — quelques éléments solides valent mieux qu'un long remplissage incomplet." },
-    { hint: "Concentre-toi sur l'essentiel : name, kind, description, episodes (au moins 1 avec name+synopsis+format+platforms), recommendedSkills. Tout le reste est optionnel — omets si tu dois saturer la sortie." },
-  ];
-
+  // Jusqu'à 2 essais. Le squelette est compact donc ça passe presque
+  // toujours du 1er coup, mais on garde un filet de sécurité.
   let lastError: unknown = null;
-
-  for (let i = 0; i < attempts.length; i++) {
-    const attempt = attempts[i];
+  for (let i = 0; i < 2; i++) {
     try {
-      const messages = [
-        {
-          role: "user" as const,
-          content: userParts,
-        },
-        ...(attempt.hint
-          ? [
-              {
-                role: "user" as const,
-                content: [{ type: "text" as const, text: attempt.hint }],
-              },
-            ]
-          : []),
-      ];
-
       const { object } = await generateObject({
-        // Flash : gratuit + suffisamment capable. maxOutputTokens augmenté
-        // à 32k car le schéma riche peut générer beaucoup de JSON et le
-        // défaut Gemini (8k) provoque des troncatures → no object generated.
         model: google("gemini-2.5-flash"),
-        schema: draftSchema,
-        system: SYSTEM_PROMPT,
-        messages,
-        maxOutputTokens: 32_768,
+        schema: skeletonSchema,
+        system: SKELETON_SYSTEM_PROMPT,
+        messages: [{ role: "user", content: userParts }],
+        maxOutputTokens: 16_384,
       });
       if (i > 0) {
-        console.warn(`[ai] generateProjectDraft réussi au retry ${i + 1}/${attempts.length}`);
+        console.warn(`[ai] skeleton OK au retry ${i + 1}/2`);
       }
-      return { ok: true, draft: object };
+      return { ok: true, skeleton: object };
     } catch (e) {
       lastError = e;
       const msg = e instanceof Error ? e.message : String(e);
       console.warn(
-        `[ai] generateProjectDraft échec ${i + 1}/${attempts.length}: ${msg.slice(0, 300)}`,
+        `[ai] skeleton échec ${i + 1}/2 : ${msg.slice(0, 300)}`,
       );
-      // Si c'est une erreur "non récupérable" (location, quota, payload),
-      // on n'insiste pas — on sort tout de suite avec le bon message.
-      const lower = msg.toLowerCase();
-      if (
-        msg.includes("RESOURCE_EXHAUSTED") ||
-        msg.includes("429") ||
-        lower.includes("location is not supported") ||
-        lower.includes("permission_denied") ||
-        lower.includes("payload")
-      ) {
-        break;
+      if (isFatalError(msg)) break;
+    }
+  }
+  return { ok: false, error: humanizeError(lastError) };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 2 — Enrichment per episode
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function enrichEpisode(
+  skeleton: Skeleton,
+  episode: z.infer<typeof skeletonEpisodeSchema>,
+): Promise<
+  | { ok: true; enrichment: z.infer<typeof enrichmentSchema> }
+  | { ok: false; error: string }
+> {
+  // Contexte du projet pour que Gemini reste cohérent.
+  const context = [
+    `Projet : ${skeleton.name}`,
+    `Description : ${skeleton.description}`,
+    `Audience cible : ${skeleton.target_audience}`,
+    `Ton éditorial : ${skeleton.tone}`,
+    "",
+    `--- ÉMISSION À ENRICHIR ---`,
+    `Titre : ${episode.name}`,
+    `Synopsis : ${episode.description}`,
+    `Format : ${episode.format}`,
+    `Durée : ${episode.duration_minutes} min`,
+    `Plateformes : ${episode.platforms.join(", ") || "non précisé"}`,
+    `Lieu suggéré : ${episode.location_suggestion}`,
+    `Intervenants suggérés : ${episode.guests_suggestion.join(", ")}`,
+  ].join("\n");
+
+  let lastError: unknown = null;
+  for (let i = 0; i < 2; i++) {
+    try {
+      const { object } = await generateObject({
+        model: google("gemini-2.5-flash"),
+        schema: enrichmentSchema,
+        system: ENRICH_SYSTEM_PROMPT,
+        messages: [{ role: "user", content: [{ type: "text", text: context }] }],
+        maxOutputTokens: 16_384,
+      });
+      if (i > 0) {
+        console.warn(
+          `[ai] enrichment "${episode.name}" OK au retry ${i + 1}/2`,
+        );
       }
-      // Sinon : on retry avec un hint supplémentaire.
+      return { ok: true, enrichment: object };
+    } catch (e) {
+      lastError = e;
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(
+        `[ai] enrichment "${episode.name}" échec ${i + 1}/2 : ${msg.slice(0, 300)}`,
+      );
+      if (isFatalError(msg)) break;
     }
   }
+  return { ok: false, error: humanizeError(lastError) };
+}
 
-  // Si on arrive ici, tous les essais ont échoué.
-  {
-    const e = lastError;
-    const msg = e instanceof Error ? e.message : "Erreur inconnue.";
-    const lower = msg.toLowerCase();
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
 
-    if (msg.includes("RESOURCE_EXHAUSTED") || msg.includes("429")) {
-      return {
-        ok: false,
-        error:
-          "Quota Google AI atteint (limite gratuite : 1500 requêtes/jour). Réessaie dans 1 minute.",
-      };
-    }
-    if (
-      lower.includes("user location is not supported") ||
-      lower.includes("location is not supported") ||
-      lower.includes("permission_denied")
-    ) {
-      return {
-        ok: false,
-        error:
-          "Google AI bloque ta région (probablement à cause d'un VPN). Désactive le VPN, ou teste cette feature en prod (Vercel) — leurs serveurs ne sont pas bloqués.",
-      };
-    }
-    if (
-      lower.includes("response did not match schema") ||
-      lower.includes("no object generated")
-    ) {
-      return {
-        ok: false,
-        error:
-          "Gemini n'arrive pas à structurer la réponse même après 3 essais. C'est probablement une limite du modèle Flash sur ce schéma riche. Tu peux réessayer dans quelques minutes (Gemini varie), ou raccourcir/restructurer ta demande pour qu'elle soit plus directe (1 émission claire, 1 ton, 1 cible).",
-      };
-    }
-    if (lower.includes("payload") || lower.includes("size")) {
-      return {
-        ok: false,
-        error:
-          "Le document est trop volumineux. Essaie un PDF plus léger (<20 Mo).",
-      };
-    }
-    return { ok: false, error: msg };
+function isFatalError(msg: string): boolean {
+  const lower = msg.toLowerCase();
+  return (
+    msg.includes("RESOURCE_EXHAUSTED") ||
+    msg.includes("429") ||
+    lower.includes("location is not supported") ||
+    lower.includes("permission_denied") ||
+    lower.includes("payload")
+  );
+}
+
+function humanizeError(e: unknown): string {
+  const msg = e instanceof Error ? e.message : "Erreur inconnue.";
+  const lower = msg.toLowerCase();
+
+  if (msg.includes("RESOURCE_EXHAUSTED") || msg.includes("429")) {
+    return "Quota Google AI atteint (limite gratuite : 1500 requêtes/jour). Réessaie dans 1 minute.";
   }
+  if (
+    lower.includes("user location is not supported") ||
+    lower.includes("location is not supported") ||
+    lower.includes("permission_denied")
+  ) {
+    return "Google AI bloque ta région (probablement à cause d'un VPN). Désactive le VPN, ou teste cette feature en prod (Vercel).";
+  }
+  if (
+    lower.includes("response did not match schema") ||
+    lower.includes("no object generated")
+  ) {
+    return "Gemini n'arrive pas à structurer la réponse même après plusieurs essais. Réessaie dans quelques minutes (Gemini varie) ou raccourcis légèrement ta demande.";
+  }
+  if (lower.includes("payload") || lower.includes("size")) {
+    return "Le document est trop volumineux. Essaie un PDF plus léger (<20 Mo).";
+  }
+  return msg;
 }
