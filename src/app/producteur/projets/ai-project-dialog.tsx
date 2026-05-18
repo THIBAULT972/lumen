@@ -42,6 +42,7 @@ import {
 } from "./ai-actions";
 import { createClient as createBrowserSupabase } from "@/lib/supabase/client";
 import type { ProjectDraft } from "@/lib/ai/project-generator";
+import { pollinationsUrl } from "@/lib/ai/pollinations";
 import type { ClientOption, ProducteurOption } from "./page";
 
 const STORAGE_BUCKET = "files";
@@ -420,6 +421,118 @@ export function AiProjectDialog({
           />
         </div>
 
+        {/* Direction artistique (persona + ton + refs + moodboard) */}
+        <div className="space-y-3 rounded-xl border border-primary/30 bg-primary/[0.04] p-4">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-primary" />
+            <Label className="text-primary">Direction artistique</Label>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label
+                htmlFor="ai-target"
+                className="text-[10px] uppercase tracking-wider text-muted-foreground"
+              >
+                Cible / persona
+              </Label>
+              <textarea
+                id="ai-target"
+                value={draftEdit.target_audience ?? ""}
+                onChange={(e) =>
+                  setDraftEdit({
+                    ...draftEdit,
+                    target_audience: e.target.value,
+                  })
+                }
+                rows={3}
+                className="w-full rounded-md border border-foreground/10 bg-background/40 p-2 text-xs focus:border-primary/60 focus:outline-none"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label
+                htmlFor="ai-tone"
+                className="text-[10px] uppercase tracking-wider text-muted-foreground"
+              >
+                Ton éditorial
+              </Label>
+              <Input
+                id="ai-tone"
+                value={draftEdit.tone ?? ""}
+                onChange={(e) =>
+                  setDraftEdit({ ...draftEdit, tone: e.target.value })
+                }
+                placeholder="punchy, premium, intimiste…"
+                className="h-9 bg-background/40 text-sm"
+              />
+              {draftEdit.inspiration_references &&
+              draftEdit.inspiration_references.length > 0 ? (
+                <div className="mt-2 space-y-1">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Inspirations
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {draftEdit.inspiration_references.map((r, i) => (
+                      <Badge
+                        key={i}
+                        variant="secondary"
+                        className="text-[10px]"
+                      >
+                        {r}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          {/* Moodboard images via Pollinations */}
+          {draftEdit.moodboard_prompts &&
+          draftEdit.moodboard_prompts.length > 0 ? (
+            <div className="space-y-2">
+              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                Moodboard généré (Pollinations)
+              </Label>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {draftEdit.moodboard_prompts.map((prompt, i) => (
+                  <PollinationsImage
+                    key={i}
+                    prompt={prompt}
+                    aspect="square"
+                    title={prompt}
+                  />
+                ))}
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Images générées à la volée (~3-8 s pour la première fois,
+                ensuite cachées). Clique sur une image pour ouvrir en grand.
+              </p>
+            </div>
+          ) : null}
+
+          {/* Production tips */}
+          {draftEdit.production_tips &&
+          draftEdit.production_tips.length > 0 ? (
+            <div className="space-y-1.5">
+              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                Conseils prod
+              </Label>
+              <ul className="space-y-1">
+                {draftEdit.production_tips.map((tip, i) => (
+                  <li
+                    key={i}
+                    className="flex items-start gap-2 text-xs text-muted-foreground"
+                  >
+                    <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-primary/70" />
+                    <span>{tip}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+
         {/* Producteurs */}
         <div className="space-y-2">
           <Label>Qui gère ce projet ?</Label>
@@ -475,6 +588,15 @@ export function AiProjectDialog({
                       description: "",
                       format: "Reportage",
                       platforms: [],
+                      script: {
+                        hook: "",
+                        sections: [
+                          { heading: "Section 1", content: "" },
+                        ],
+                        cta: "",
+                      },
+                      shots: [],
+                      visual_prompts: [],
                     },
                   ],
                 })
@@ -562,18 +684,150 @@ export function AiProjectDialog({
                   placeholder="Synopsis…"
                   className="w-full rounded-md border border-foreground/10 bg-foreground/[0.03] p-2 text-xs placeholder:text-muted-foreground/60 focus:border-primary/60 focus:outline-none"
                 />
-                {ep.platforms.length > 0 ? (
-                  <div className="flex flex-wrap gap-1">
-                    {ep.platforms.map((p) => (
-                      <Badge
-                        key={p}
-                        variant="secondary"
-                        className="text-[10px]"
-                      >
-                        {p}
-                      </Badge>
-                    ))}
+
+                {/* Meta line : durée + lieu */}
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                  {ep.duration_minutes ? (
+                    <span>⏱ {ep.duration_minutes} min</span>
+                  ) : null}
+                  {ep.location_suggestion ? (
+                    <span>📍 {ep.location_suggestion}</span>
+                  ) : null}
+                  {ep.platforms.length > 0
+                    ? ep.platforms.map((p) => (
+                        <Badge key={p} variant="secondary" className="text-[10px]">
+                          {p}
+                        </Badge>
+                      ))
+                    : null}
+                </div>
+
+                {/* Visual prompts → images Pollinations */}
+                {ep.visual_prompts && ep.visual_prompts.length > 0 ? (
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Visuels suggérés
+                    </p>
+                    <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+                      {ep.visual_prompts.map((prompt, i) => (
+                        <PollinationsImage
+                          key={i}
+                          prompt={prompt}
+                          aspect="video"
+                          title={prompt}
+                        />
+                      ))}
+                    </div>
                   </div>
+                ) : null}
+
+                {/* Invités suggérés */}
+                {ep.guests_suggestion && ep.guests_suggestion.length > 0 ? (
+                  <div className="space-y-1">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Profils d'intervenants suggérés
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {ep.guests_suggestion.map((g, i) => (
+                        <Badge
+                          key={i}
+                          variant="secondary"
+                          className="text-[10px]"
+                        >
+                          {g}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* Script (collapsible) */}
+                {ep.script ? (
+                  <details className="group rounded-md border border-foreground/10 bg-foreground/[0.02] open:bg-foreground/[0.04]">
+                    <summary className="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs font-medium">
+                      <span className="text-muted-foreground transition-transform group-open:rotate-90">
+                        ▸
+                      </span>
+                      Script
+                      <span className="ml-auto text-[10px] text-muted-foreground">
+                        {ep.script.sections?.length ?? 0} section
+                        {(ep.script.sections?.length ?? 0) > 1 ? "s" : ""}
+                      </span>
+                    </summary>
+                    <div className="space-y-3 px-3 pb-3 text-xs">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-primary">
+                          Hook (10-15 s)
+                        </p>
+                        <p className="mt-1 italic">{ep.script.hook}</p>
+                      </div>
+                      {(ep.script.sections ?? []).map((s, si) => (
+                        <div
+                          key={si}
+                          className="rounded-md border-l-2 border-primary/40 pl-3"
+                        >
+                          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                            Section {si + 1}
+                          </p>
+                          <p className="font-medium">{s.heading}</p>
+                          <p className="mt-1 text-muted-foreground">
+                            {s.content}
+                          </p>
+                          {s.b_roll && s.b_roll.length > 0 ? (
+                            <div className="mt-1.5">
+                              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                                B-roll
+                              </p>
+                              <ul className="mt-0.5 space-y-0.5">
+                                {s.b_roll.map((b, bi) => (
+                                  <li
+                                    key={bi}
+                                    className="text-[11px] text-muted-foreground"
+                                  >
+                                    · {b}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : null}
+                        </div>
+                      ))}
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-primary">
+                          CTA (fin)
+                        </p>
+                        <p className="mt-1 italic">{ep.script.cta}</p>
+                      </div>
+                    </div>
+                  </details>
+                ) : null}
+
+                {/* Shot list (collapsible) */}
+                {ep.shots && ep.shots.length > 0 ? (
+                  <details className="group rounded-md border border-foreground/10 bg-foreground/[0.02] open:bg-foreground/[0.04]">
+                    <summary className="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs font-medium">
+                      <span className="text-muted-foreground transition-transform group-open:rotate-90">
+                        ▸
+                      </span>
+                      Shot list
+                      <span className="ml-auto text-[10px] text-muted-foreground">
+                        {ep.shots.length} plan{ep.shots.length > 1 ? "s" : ""}
+                      </span>
+                    </summary>
+                    <ul className="space-y-1.5 px-3 pb-3 text-xs">
+                      {ep.shots.map((s, si) => (
+                        <li
+                          key={si}
+                          className="flex items-start gap-2 rounded-md bg-foreground/[0.02] px-2 py-1.5"
+                        >
+                          <span className="shrink-0 rounded-full border border-foreground/15 bg-foreground/[0.04] px-2 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
+                            {s.type}
+                          </span>
+                          <span className="min-w-0 flex-1">{s.description}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
                 ) : null}
               </div>
             ))}
@@ -649,6 +903,64 @@ export function AiProjectDialog({
         </Button>
       </DialogFooter>
     </DialogContent>
+  );
+}
+
+/**
+ * Petite vignette d'image générée par Pollinations (gratuit, sans clé).
+ * Lazy-loaded ; affiche un skeleton tant que l'image n'est pas chargée.
+ * Au clic, ouvre l'image en grand dans un nouvel onglet.
+ */
+function PollinationsImage({
+  prompt,
+  aspect = "video",
+  title,
+}: {
+  prompt: string;
+  aspect?: "square" | "video";
+  title?: string;
+}) {
+  const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const size = aspect === "square" ? { w: 768, h: 768 } : { w: 1024, h: 576 };
+  const src = pollinationsUrl(prompt, {
+    width: size.w,
+    height: size.h,
+  });
+  const ratio = aspect === "square" ? "aspect-square" : "aspect-video";
+
+  if (failed) {
+    return (
+      <div
+        className={`${ratio} flex items-center justify-center rounded-md border border-dashed border-foreground/15 bg-foreground/[0.02] p-2 text-center text-[10px] text-muted-foreground`}
+        title={title}
+      >
+        Génération indispo
+      </div>
+    );
+  }
+
+  return (
+    <a
+      href={src}
+      target="_blank"
+      rel="noopener"
+      title={title}
+      className={`${ratio} group relative block overflow-hidden rounded-md border border-foreground/10 bg-foreground/[0.04] transition-transform hover:scale-[1.02]`}
+    >
+      {!loaded ? (
+        <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-foreground/[0.05] to-foreground/[0.02]" />
+      ) : null}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt={title ?? "Generated visual"}
+        loading="lazy"
+        onLoad={() => setLoaded(true)}
+        onError={() => setFailed(true)}
+        className={`h-full w-full object-cover transition-opacity duration-500 ${loaded ? "opacity-100" : "opacity-0"}`}
+      />
+    </a>
   );
 }
 

@@ -170,12 +170,24 @@ export async function createProjectFromAiDraft(input: {
 
   const admin = createAdminClient();
 
+  // Capture le brief projet (ce qui n'est pas couvert par les colonnes
+  // typées : target audience, ton, moodboard prompts, tips, refs).
+  const projectBrief = {
+    target_audience: draft.target_audience,
+    tone: draft.tone,
+    moodboard_prompts: draft.moodboard_prompts,
+    production_tips: draft.production_tips ?? [],
+    inspiration_references: draft.inspiration_references ?? [],
+    recommended_skills: draft.recommendedSkills ?? [],
+  };
+
   const { data: project, error: projErr } = await admin
     .from("projects")
     .insert({
       name: draft.name.trim(),
       description: draft.description.trim() || null,
       client_id: draft.kind === "client" ? clientId ?? null : null,
+      ai_brief: projectBrief,
       created_by: guard.user.id,
     })
     .select("id")
@@ -204,6 +216,17 @@ export async function createProjectFromAiDraft(input: {
       platforms: ep.platforms ?? [],
       status: "idea" as const,
       order_index: idx,
+      duration_minutes: ep.duration_minutes ?? null,
+      location: ep.location_suggestion?.trim() || null,
+      guests: ep.guests_suggestion ?? [],
+      // Tout le brief riche (script, shot list, visual prompts) dans jsonb.
+      ai_brief: {
+        script: ep.script,
+        shots: ep.shots,
+        visual_prompts: ep.visual_prompts,
+        location_suggestion: ep.location_suggestion ?? null,
+        guests_suggestion: ep.guests_suggestion ?? [],
+      },
     }));
     const { error: epErr } = await admin.from("episodes").insert(rows);
     if (epErr) {
