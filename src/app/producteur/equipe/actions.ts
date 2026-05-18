@@ -89,6 +89,35 @@ export async function createMember(
 
 export type UpdateMemberState = ActionResult | null;
 
+// Champs facturation pour les clients (table `client_profiles`).
+const CLIENT_PROFILE_FIELDS = [
+  "company_name",
+  "legal_form",
+  "address_line1",
+  "address_line2",
+  "postal_code",
+  "city",
+  "country",
+  "siret",
+  "vat_number",
+  "phone",
+  "contact_name",
+] as const;
+
+function readClientProfileFromFormData(
+  fd: FormData,
+): Record<(typeof CLIENT_PROFILE_FIELDS)[number], string | null> {
+  const out = {} as Record<
+    (typeof CLIENT_PROFILE_FIELDS)[number],
+    string | null
+  >;
+  for (const f of CLIENT_PROFILE_FIELDS) {
+    const raw = String(fd.get(f) ?? "").trim();
+    out[f] = raw === "" ? null : raw;
+  }
+  return out;
+}
+
 export async function updateMember(
   userId: string,
   _prev: UpdateMemberState,
@@ -132,7 +161,20 @@ export async function updateMember(
     }
   }
 
+  if (target.role === "client") {
+    const payload = readClientProfileFromFormData(formData);
+    const { error: cpErr } = await admin
+      .from("client_profiles")
+      .upsert(
+        { id: userId, ...payload },
+        { onConflict: "id" },
+      );
+    if (cpErr) return { ok: false, error: cpErr.message };
+  }
+
   revalidatePath("/producteur/equipe");
+  // Les pages facturation montrent ces infos : on revalide globalement.
+  revalidatePath("/producteur/projets", "layout");
   return { ok: true };
 }
 

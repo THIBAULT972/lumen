@@ -130,6 +130,9 @@ prod/
 | `files` | Mixte (cf. RLS) | Path Supabase Storage tracké ici. `target` enum définit le contexte |
 | `text_documents` | Producteur (CRUD) | Stocke JSON Tiptap. Édition temps réel = post-MVP |
 | `notifications` | Système | In-app uniquement pour l'instant |
+| `client_profiles` | Producteur (CRUD) + client (read self) | Infos étendues côté client : raison sociale, adresse de facturation, SIRET, n° TVA, téléphone, contact… Sert au bloc « Client » des factures PDF. Pattern miroir de `prestataire_profiles` |
+| `invoices` | Producteur (CRUD) + client (SELECT non-draft) | En-tête facture : `number` auto (LUM-YYYY-NNN), `status` (draft/sent/paid/overdue/cancelled), dates, totaux HT/TVA/TTC, `studio_snapshot` + `client_snapshot` (figés à émission, refresh sur update tant que draft) |
+| `invoice_lines` | Mêmes droits que `invoices` | Lignes : description, qty, PU HT, taux TVA, totaux dérivés |
 
 ### RLS — modèle mental
 - Le **producteur** voit tout, peut tout — **sauf qu'un projet n'est visible que pour les producteurs qui y sont explicitement assignés** (`project_producteurs`). Helper SQL `public.is_producteur()` pour vérifier le rôle, `public.is_project_producteur(p_id)` pour vérifier l'assignation projet.
@@ -142,10 +145,11 @@ prod/
   - les fichiers qu'il a uploadés ou qui lui sont destinés,
   - ses notifications.
 - Le **client** voit :
-  - son propre `profile`,
+  - son propre `profile` + son `client_profile`,
   - les projets où il est `client_id`,
   - les épisodes de ses projets,
   - les fichiers de ses projets ou de son hub (`destination_user_id = lui`),
+  - les **factures non-draft** de ses projets (RLS de `invoices` + `invoice_lines` filtre `status <> 'draft'`),
   - ses notifications.
 
 ### Helpers SQL (cf. `db/schema.sql` + migrations)
@@ -153,6 +157,7 @@ prod/
 - `current_user_role()` → user_role
 - `is_banned()` → bool (utilisé par RLS missions broadcast)
 - `is_project_producteur(p_id uuid)` → bool (depuis migration 002)
+- `next_invoice_number()` → text — génère `LUM-YYYY-NNN` en scannant le max existant pour l'année en cours (depuis migration 010). Doit être appelé via `admin.rpc("next_invoice_number")` côté server action.
 - Trigger `tg_set_updated_at()` attaché à toutes les tables avec `updated_at`.
 
 ### Permissions et grants
@@ -217,6 +222,15 @@ Projet ──┬──> Émission 1 ──┬──> Mission 1 (droniste, 15/07,
 - Toutes les dates affichées en `America/Martinique` (UTC-4, pas de DST).
 - En BDD on stocke en `timestamptz` (UTC sous le capot). La conversion se fait à l'affichage.
 
+### 5.8 Facturation (P5)
+- **1 projet client = N factures**. La facturation n'est dispo que si `projects.client_id IS NOT NULL` (bouton « Facturation » masqué sinon).
+- Cycle de vie : `draft` → `sent` (visible client) → `paid` (ou `overdue`) ; chemin alternatif `cancelled`. Un brouillon est éditable, supprimable physiquement ; une facture émise se contente du chemin `cancelled` (on garde l'historique).
+- **Numérotation atomique** : `next_invoice_number()` côté Postgres scanne le max existant pour l'année en cours et renvoie `LUM-YYYY-NNN`. Reset implicite à chaque nouvelle année.
+- **Snapshots** : à la création, le studio (`STUDIO_INFO`) et le client (`profile` + `client_profile`) sont sérialisés dans `studio_snapshot` / `client_snapshot` (jsonb) sur la ligne `invoices`. Tant que la facture est `draft`, le snapshot client est **rafraîchi à chaque update**. À partir de `sent`, le snapshot est **immuable** — toute modif ultérieure de l'adresse client ne réécrit jamais l'historique.
+- **TVA 0 % (art. 293B CGI)** : `STUDIO_INFO.defaultVatRate = 0` + mention obligatoire affichée dans le bloc dédié du PDF.
+- **PDF** : généré server-side avec `@react-pdf/renderer` (`src/lib/invoice-pdf.tsx`). Streamé par `GET /api/invoices/[id]/pdf`. RLS-checked : le user-scoped client Supabase tente d'abord un `SELECT id` pour valider l'accès, puis l'admin client fait le full read.
+- **Studio info** : hardcodé dans `src/lib/studio-info.ts`. À déplacer dans une table `studio_settings` si on a un jour plusieurs studios sur la même instance LUMEN.
+
 ---
 
 ## 6. Sécurité
@@ -256,9 +270,10 @@ Réinitialisables via `npm run seed` (idempotent).
 | **P2.2** | ✅ | Projets (client/média) + émissions (réorderable) |
 | **P2.3.a** | ✅ | Missions : création/édition/suppression + UI section dans le panel épisode |
 | **P2.3.b** | ⏳ | Broadcast Uber (bouton "Envoyer aux prestataires") + désistement+pénalité |
-| **P3** | ⏳ | Hubs clients (upload/download fichiers) — Supabase Storage |
+| **P3** | ✅ | Hubs clients (upload/download fichiers) — Supabase Storage |
 | **P4** | ⏳ | Calendrier + notifications temps réel (Supabase Realtime) |
-| **post-MVP** | ⏳ | PWA, Web Push, WebAuthn, édition texte temps réel (Yjs) |
+| **P5** | ✅ | Facturation : tables `invoices` + `invoice_lines` + `client_profiles`, auto-numérotation, snapshots, PDF stylisé LUMEN (293B), download côté client et producteur |
+| **post-MVP** | ⏳ | PWA, Web Push, WebAuthn, édition texte temps réel (Yjs), workflow devis |
 
 ---
 
@@ -277,6 +292,8 @@ Réinitialisables via `npm run seed` (idempotent).
   - **`DropdownMenuItem` utilise `onClick`, PAS `onSelect`** (Radix). `onSelect` est silencieusement ignoré → l'item paraît mort. Pour empêcher la fermeture du menu après le clic (utile quand l'action est inline genre regen mdp), passer `closeOnClick={false}`.
 - ✋ **Le proxy ne doit PAS traiter les requêtes non-GET.** Les server actions (POST) et les RSC fetches utilisent un protocole streamé que Next compose lui-même. Si le proxy fait `NextResponse.next({ request })` ou écrit dans la response (typique du pattern Supabase SSR pour rafraîchir les cookies), le stream est corrompu et le client reçoit `An unexpected response was received from the server`. **Solution** : `if (request.method !== "GET") return NextResponse.next();` en début de proxy. La session reste rafraîchie par `createClient()` côté serveur.
 - ✋ **Un fichier `"use server"` ne peut exporter QUE des fonctions async.** Exporter une `const` (ex: tableau d'enum) ou un objet fait crasher l'app au render avec `A "use server" file can only export async functions, found object`. Mettre les constantes/types partagés dans un fichier séparé (ex: `episode-types.ts`) que `actions.ts` et la UI importent tous les deux.
+- ✋ **`Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" })` casse dans `@react-pdf/renderer`.** L'API insère un narrow no-break space (U+202F) entre les milliers et avant le symbole € ; la police par défaut (Helvetica) ne sait pas le rendre et affiche une glyphe absente (typiquement un slash → `1/750 €`). Solution dans le PDF : formater à la main avec des espaces classiques (`replace(/\B(?=(\d{3})+(?!\d))/g, " ")`). Garder `Intl` dans la UI web où le NBSP rend bien et empêche les sauts de ligne au milieu des nombres.
+- ✋ **Le particule du nom de famille doit être tapée à part.** Le nom légal officiel de Thibault est « DE LEPINE » (le « de » fait partie du nom de famille, pas une particule de noblesse séparable). Hardcodé dans `src/lib/studio-info.ts` → tout changement du nom légal y est à modifier (et les anciennes factures gardent le `studio_snapshot` figé donc rien à migrer).
 
 ---
 

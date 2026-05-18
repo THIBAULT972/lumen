@@ -852,3 +852,181 @@ export async function deleteEpisodeFile(
   revalidatePath(`/producteur/projets/${projectId}`);
   return { ok: true };
 }
+
+// ============================================================================
+// CLIENT DELIVERABLES — fichiers déposés par le producteur dans le hub client.
+// Différence avec `requestEpisodeFileUpload` : target='hub_client',
+// destination_user_id = project.client_id, rattaché au projet (pas à l'épisode).
+// Le client voit ces fichiers dans son espace via la RLS de la table `files`.
+// ============================================================================
+
+const MAX_DELIVERABLE_SIZE = 5 * 1024 * 1024 * 1024; // 5 GB (vidéos lourdes OK)
+
+export type ClientDeliverableUploadInit =
+  | {
+      ok: true;
+      fileId: string;
+      storagePath: string;
+      token: string;
+      /** Full signed URL ready to PUT — for byte-level progress upload. */
+      signedUrl: string;
+    }
+  | { ok: false; error: string };
+
+export async function requestClientDeliverableUpload(
+  projectId: string,
+  filename: string,
+  mimeType: string,
+  size: number,
+): Promise<ClientDeliverableUploadInit> {
+  const guard = await getProducteur();
+  if (!guard.ok) return guard;
+
+  const cleanName = filename
+    .replace(/[^a-zA-Z0-9._\-\s]/g, "_")
+    .replace(/\s+/g, "_")
+    .slice(0, 120);
+  if (!cleanName) return { ok: false, error: "Nom de fichier invalide." };
+  if (!Number.isFinite(size) || size < 0) {
+    return { ok: false, error: "Taille de fichier invalide." };
+  }
+  if (size > MAX_DELIVERABLE_SIZE) {
+    return {
+      ok: false,
+      error: `Fichier trop volumineux (max ${Math.round(MAX_DELIVERABLE_SIZE / 1_073_741_824)} Go).`,
+    };
+  }
+
+  const admin = createAdminClient();
+
+  // Vérifie que le projet existe et a bien un client.
+  const { data: project, error: pErr } = await admin
+    .from("projects")
+    .select("id, client_id")
+    .eq("id", projectId)
+    .maybeSingle();
+  if (pErr || !project) {
+    return { ok: false, error: "Projet introuvable." };
+  }
+  if (!project.client_id) {
+    return {
+      ok: false,
+      error:
+        "Ce projet n'a pas de client rattaché. Lie un client au projet d'abord (Modifier le projet → type Client).",
+    };
+  }
+
+  const id = crypto.randomUUID();
+  const storagePath = `client/${projectId}/${id}-${cleanName}`;
+
+  const { data: row, error: dbErr } = await admin
+    .from("files")
+    .insert({
+      id,
+      storage_path: storagePath,
+      filename: cleanName,
+      mime_type: mimeType || null,
+      size_bytes: size,
+      target: "hub_client",
+      project_id: projectId,
+      destination_user_id: project.client_id,
+      uploaded_by: guard.user.id,
+    })
+    .select("id")
+    .single();
+  if (dbErr || !row) {
+    return { ok: false, error: dbErr?.message ?? "Erreur de base de données." };
+  }
+
+  const { data: signed, error: signedErr } = await admin.storage
+    .from(STORAGE_BUCKET)
+    .createSignedUploadUrl(storagePath);
+
+  if (signedErr || !signed) {
+    await admin.from("files").delete().eq("id", row.id);
+    return {
+      ok: false,
+      error: signedErr?.message ?? "Erreur Supabase Storage.",
+    };
+  }
+
+  revalidatePath(`/producteur/projets/${projectId}`);
+  revalidatePath("/client");
+  return {
+    ok: true,
+    fileId: row.id,
+    storagePath: signed.path,
+    token: signed.token,
+    signedUrl: signed.signedUrl,
+  };
+}
+
+export async function finalizeClientDeliverableUpload(
+  projectId: string,
+): Promise<Result> {
+  const guard = await getProducteur();
+  if (!guard.ok) return guard;
+  revalidatePath(`/producteur/projets/${projectId}`);
+  revalidatePath("/client");
+  return { ok: true };
+}
+
+/**
+ * Cleanup quand le PUT direct vers Supabase Storage échoue (413, abort,
+ * timeout réseau…). Le record `files` a été inséré AVANT l'upload effectif
+ * — sans ce cleanup, on laisserait un orphelin qui ferait apparaître un
+ * livrable "fantôme" côté client avec téléchargement renvoyant
+ * "Object not found".
+ */
+export async function cancelClientDeliverableUpload(
+  fileId: string,
+  projectId: string,
+): Promise<Result> {
+  const guard = await getProducteur();
+  if (!guard.ok) return guard;
+  const admin = createAdminClient();
+
+  const { data: file } = await admin
+    .from("files")
+    .select("storage_path, target")
+    .eq("id", fileId)
+    .maybeSingle();
+  // Tente de supprimer l'objet storage (idempotent : OK s'il n'existe pas).
+  if (file?.storage_path) {
+    await admin.storage.from(STORAGE_BUCKET).remove([file.storage_path]);
+  }
+  await admin.from("files").delete().eq("id", fileId);
+  revalidatePath(`/producteur/projets/${projectId}`);
+  revalidatePath("/client");
+  return { ok: true };
+}
+
+export async function deleteClientDeliverable(
+  fileId: string,
+  projectId: string,
+): Promise<Result> {
+  const guard = await getProducteur();
+  if (!guard.ok) return guard;
+
+  const admin = createAdminClient();
+  const { data: file, error: fileErr } = await admin
+    .from("files")
+    .select("storage_path, target")
+    .eq("id", fileId)
+    .single();
+  if (fileErr || !file) return { ok: false, error: "Fichier introuvable." };
+  if (file.target !== "hub_client") {
+    return {
+      ok: false,
+      error: "Ce fichier n'est pas un livrable client. Utilise l'autre action.",
+    };
+  }
+
+  await admin.storage.from(STORAGE_BUCKET).remove([file.storage_path]);
+  const { error: delErr } = await admin.from("files").delete().eq("id", fileId);
+  if (delErr) return { ok: false, error: delErr.message };
+
+  revalidatePath(`/producteur/projets/${projectId}`);
+  revalidatePath("/client");
+  return { ok: true };
+}

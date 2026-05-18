@@ -1,12 +1,13 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Users, Video, Sparkles } from "lucide-react";
+import { ArrowLeft, Users, Video, Sparkles, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/server";
 import type { EpisodeStatus } from "../episode-types";
 import type { MissionStatus } from "../mission-types";
 import type { FileRecord, FileTarget } from "../file-types";
 import { ProjetWorkspace } from "./projet-workspace";
+import { ClientDeliverablesSection } from "./client-deliverables-section";
 import type { Mission } from "./missions-section";
 
 export type Episode = {
@@ -82,7 +83,7 @@ export default async function ProjetDetailPage({
       .select(
         "id, storage_path, filename, mime_type, size_bytes, target, project_id, episode_id, mission_id, destination_user_id, uploaded_by, created_at",
       )
-      .eq("target", "episode")
+      .in("target", ["episode", "hub_client"])
       .order("created_at", { ascending: false }),
   ]);
 
@@ -224,13 +225,24 @@ export default async function ProjetDetailPage({
           ) : null}
         </div>
 
-        <Link
-          href={`/producteur/projets/${project.id}/board`}
-          className="inline-flex h-9 items-center justify-center gap-1.5 self-start rounded-md border border-border bg-secondary/40 px-3 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
-        >
-          <Sparkles className="h-4 w-4" />
-          Espace de création
-        </Link>
+        <div className="flex flex-wrap gap-2 self-start">
+          <Link
+            href={`/producteur/projets/${project.id}/board`}
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-border bg-secondary/40 px-3 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+          >
+            <Sparkles className="h-4 w-4" />
+            Espace de création
+          </Link>
+          {project.client_id ? (
+            <Link
+              href={`/producteur/projets/${project.id}/facturation`}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-md border border-border bg-secondary/40 px-3 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+            >
+              <FileText className="h-4 w-4" />
+              Facturation
+            </Link>
+          ) : null}
+        </div>
       </section>
 
       {episodesError ? (
@@ -248,12 +260,26 @@ export default async function ProjetDetailPage({
           </p>
         </div>
       ) : (
-        <ProjetWorkspace
-          projectId={project.id}
-          episodes={episodes}
-          availablePlatforms={platforms}
-          availableSkills={skills}
-        />
+        <>
+          <ProjetWorkspace
+            projectId={project.id}
+            episodes={episodes}
+            availablePlatforms={platforms}
+            availableSkills={skills}
+          />
+
+          {project.client_id && clientName ? (
+            <div className="mt-12 border-t border-border pt-8">
+              <ClientDeliverablesSection
+                projectId={project.id}
+                clientName={clientName}
+                files={allFiles.filter(
+                  (f) => f.target === "hub_client" && f.project_id === project.id,
+                )}
+              />
+            </div>
+          ) : null}
+        </>
       )}
     </>
   );

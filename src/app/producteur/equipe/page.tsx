@@ -1,6 +1,20 @@
 import { createClient } from "@/lib/supabase/server";
 import { EquipeManager } from "./equipe-manager";
 
+export type ClientProfile = {
+  company_name: string | null;
+  legal_form: string | null;
+  address_line1: string | null;
+  address_line2: string | null;
+  postal_code: string | null;
+  city: string | null;
+  country: string | null;
+  siret: string | null;
+  vat_number: string | null;
+  phone: string | null;
+  contact_name: string | null;
+};
+
 export type Member = {
   id: string;
   email: string;
@@ -9,6 +23,7 @@ export type Member = {
   created_at: string;
   banned_until: string | null;
   skill_ids: string[];
+  client_profile: ClientProfile | null;
 };
 
 export type Skill = { id: string; name: string };
@@ -16,21 +31,45 @@ export type Skill = { id: string; name: string };
 export default async function EquipePage() {
   const supabase = await createClient();
 
-  const [profilesRes, userSkillsRes, skillsRes] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select(
-        "id, email, role, first_name, last_name, created_at, banned_until",
-      )
-      .in("role", ["producteur", "prestataire", "client"])
-      .order("created_at", { ascending: false }),
-    supabase.from("user_skills").select("user_id, skill_id"),
-    supabase.from("skills").select("id, name").order("name"),
-  ]);
+  const [profilesRes, userSkillsRes, skillsRes, clientProfilesRes] =
+    await Promise.all([
+      supabase
+        .from("profiles")
+        .select(
+          "id, email, role, first_name, last_name, created_at, banned_until",
+        )
+        .in("role", ["producteur", "prestataire", "client"])
+        .order("created_at", { ascending: false }),
+      supabase.from("user_skills").select("user_id, skill_id"),
+      supabase.from("skills").select("id, name").order("name"),
+      supabase
+        .from("client_profiles")
+        .select(
+          "id, company_name, legal_form, address_line1, address_line2, postal_code, city, country, siret, vat_number, phone, contact_name",
+        ),
+    ]);
 
   const profiles = profilesRes.data ?? [];
   const userSkills = userSkillsRes.data ?? [];
   const skills: Skill[] = skillsRes.data ?? [];
+  const clientProfilesById = new Map<string, ClientProfile>(
+    (clientProfilesRes.data ?? []).map((cp) => [
+      cp.id as string,
+      {
+        company_name: cp.company_name,
+        legal_form: cp.legal_form,
+        address_line1: cp.address_line1,
+        address_line2: cp.address_line2,
+        postal_code: cp.postal_code,
+        city: cp.city,
+        country: cp.country,
+        siret: cp.siret,
+        vat_number: cp.vat_number,
+        phone: cp.phone,
+        contact_name: cp.contact_name,
+      },
+    ]),
+  );
 
   const enrichMember = (row: (typeof profiles)[number]): Member => ({
     id: row.id,
@@ -42,6 +81,7 @@ export default async function EquipePage() {
     skill_ids: userSkills
       .filter((us) => us.user_id === row.id)
       .map((us) => us.skill_id),
+    client_profile: clientProfilesById.get(row.id) ?? null,
   });
 
   const producteurs = profiles

@@ -117,6 +117,7 @@ export function EquipeManager({
         members={producteurs}
         skills={skills}
         showSkills={false}
+        isClient={false}
         onPasswordRegenerated={setGenerated}
       />
 
@@ -127,6 +128,7 @@ export function EquipeManager({
           members={prestataires}
           skills={skills}
           showSkills
+          isClient={false}
           onPasswordRegenerated={setGenerated}
         />
       </div>
@@ -138,6 +140,7 @@ export function EquipeManager({
           members={clients}
           skills={skills}
           showSkills={false}
+          isClient
           onPasswordRegenerated={setGenerated}
         />
       </div>
@@ -156,6 +159,7 @@ function TeamSection({
   members,
   skills,
   showSkills,
+  isClient,
   onPasswordRegenerated,
 }: {
   icon: ReactNode;
@@ -163,6 +167,7 @@ function TeamSection({
   members: Member[];
   skills: Skill[];
   showSkills: boolean;
+  isClient: boolean;
   onPasswordRegenerated: (g: GeneratedPassword) => void;
 }) {
   return (
@@ -205,6 +210,7 @@ function TeamSection({
                   member={m}
                   skills={skills}
                   showSkills={showSkills}
+                  isClient={isClient}
                   onPasswordRegenerated={onPasswordRegenerated}
                 />
               ))
@@ -220,11 +226,13 @@ function MemberRow({
   member,
   skills,
   showSkills,
+  isClient,
   onPasswordRegenerated,
 }: {
   member: Member;
   skills: Skill[];
   showSkills: boolean;
+  isClient: boolean;
   onPasswordRegenerated: (g: GeneratedPassword) => void;
 }) {
   const [editOpen, setEditOpen] = useState(false);
@@ -325,6 +333,7 @@ function MemberRow({
           member={member}
           skills={skills}
           showSkills={showSkills}
+          isClient={isClient}
           open={editOpen}
           onOpenChange={setEditOpen}
         />
@@ -509,12 +518,14 @@ function EditMemberDialog({
   member,
   skills,
   showSkills,
+  isClient,
   open,
   onOpenChange,
 }: {
   member: Member;
   skills: Skill[];
   showSkills: boolean;
+  isClient: boolean;
   open: boolean;
   onOpenChange: (v: boolean) => void;
 }) {
@@ -544,9 +555,11 @@ function EditMemberDialog({
     });
   }
 
+  const cp = member.client_profile;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="border-foreground/10 sm:max-w-lg">
+      <DialogContent className="max-h-[90vh] overflow-y-auto border-foreground/10 sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="font-heading text-2xl font-light">
             Modifier le membre
@@ -556,7 +569,7 @@ function EditMemberDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form action={formAction} className="space-y-4">
+        <form action={formAction} className="space-y-5">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label htmlFor="edit_first_name">Prénom</Label>
@@ -594,6 +607,165 @@ function EditMemberDialog({
                     {s.name}
                   </label>
                 ))}
+              </div>
+            </div>
+          ) : null}
+
+          {isClient ? (
+            <div className="space-y-3 rounded-xl border border-foreground/10 bg-foreground/[0.02] p-4">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                  Infos de facturation
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Ces infos apparaîtront sur les factures PDF émises au nom de ce
+                  client. Tout est optionnel.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="cp_company_name" className="text-xs">
+                    Raison sociale
+                  </Label>
+                  <Input
+                    id="cp_company_name"
+                    name="company_name"
+                    defaultValue={cp?.company_name ?? ""}
+                    placeholder="Ex: Acme SAS"
+                    className="h-10 bg-foreground/[0.03] text-sm"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="cp_legal_form" className="text-xs">
+                    Forme juridique
+                  </Label>
+                  <Input
+                    id="cp_legal_form"
+                    name="legal_form"
+                    defaultValue={cp?.legal_form ?? ""}
+                    placeholder="SAS, SARL, EI, Particulier…"
+                    className="h-10 bg-foreground/[0.03] text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="cp_contact_name" className="text-xs">
+                  Interlocuteur (si différent du nom du compte)
+                </Label>
+                <Input
+                  id="cp_contact_name"
+                  name="contact_name"
+                  defaultValue={cp?.contact_name ?? ""}
+                  placeholder="Prénom Nom"
+                  className="h-10 bg-foreground/[0.03] text-sm"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="cp_address_line1" className="text-xs">
+                  Adresse — ligne 1
+                </Label>
+                <Input
+                  id="cp_address_line1"
+                  name="address_line1"
+                  defaultValue={cp?.address_line1 ?? ""}
+                  placeholder="12 rue de la République"
+                  className="h-10 bg-foreground/[0.03] text-sm"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="cp_address_line2" className="text-xs">
+                  Adresse — ligne 2 (complément)
+                </Label>
+                <Input
+                  id="cp_address_line2"
+                  name="address_line2"
+                  defaultValue={cp?.address_line2 ?? ""}
+                  placeholder="Bât. A, 3e étage"
+                  className="h-10 bg-foreground/[0.03] text-sm"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="cp_postal_code" className="text-xs">
+                    CP
+                  </Label>
+                  <Input
+                    id="cp_postal_code"
+                    name="postal_code"
+                    defaultValue={cp?.postal_code ?? ""}
+                    placeholder="97200"
+                    className="h-10 bg-foreground/[0.03] text-sm"
+                  />
+                </div>
+                <div className="col-span-2 space-y-1.5">
+                  <Label htmlFor="cp_city" className="text-xs">
+                    Ville
+                  </Label>
+                  <Input
+                    id="cp_city"
+                    name="city"
+                    defaultValue={cp?.city ?? ""}
+                    placeholder="Fort-de-France"
+                    className="h-10 bg-foreground/[0.03] text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="cp_country" className="text-xs">
+                  Pays
+                </Label>
+                <Input
+                  id="cp_country"
+                  name="country"
+                  defaultValue={cp?.country ?? "France"}
+                  className="h-10 bg-foreground/[0.03] text-sm"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="cp_siret" className="text-xs">
+                    SIRET
+                  </Label>
+                  <Input
+                    id="cp_siret"
+                    name="siret"
+                    defaultValue={cp?.siret ?? ""}
+                    placeholder="123 456 789 00012"
+                    className="h-10 bg-foreground/[0.03] text-sm"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="cp_vat_number" className="text-xs">
+                    N° TVA intra
+                  </Label>
+                  <Input
+                    id="cp_vat_number"
+                    name="vat_number"
+                    defaultValue={cp?.vat_number ?? ""}
+                    placeholder="FR12345678901"
+                    className="h-10 bg-foreground/[0.03] text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="cp_phone" className="text-xs">
+                  Téléphone
+                </Label>
+                <Input
+                  id="cp_phone"
+                  name="phone"
+                  defaultValue={cp?.phone ?? ""}
+                  placeholder="+596 0 96 12 34 56"
+                  className="h-10 bg-foreground/[0.03] text-sm"
+                />
               </div>
             </div>
           ) : null}
