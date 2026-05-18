@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/server";
 import { DashboardShell } from "@/components/dashboard/shell";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { ClientDeliverableViewer } from "./deliverable-viewer";
+import { RevealStack, RevealItem, GreetingGlow } from "./hub-reveal";
 import type { FileRecord, FileTarget } from "../producteur/projets/file-types";
 import type { InvoiceRow, InvoiceStatus } from "../producteur/projets/invoice-types";
 import { cn } from "@/lib/utils";
@@ -131,21 +132,24 @@ export default async function ClientPage() {
 
   return (
     <DashboardShell role="Client" userName={displayName}>
-      <section className="mb-5 sm:mb-10">
-        <p className="text-[10px] uppercase tracking-[0.32em] text-muted-foreground sm:text-[11px]">
-          Hub · Espace client
-        </p>
-        <h1 className="mt-2 font-heading text-2xl font-light tracking-tight sm:mt-3 sm:text-4xl">
-          Bonjour, <span className="text-gradient-neon">{displayName}</span>.
-        </h1>
-        <p className="mt-1.5 hidden max-w-xl text-sm text-muted-foreground sm:mt-2 sm:block">
-          Suis l'avancement de tes productions et récupère tes livrables ici.
-        </p>
-      </section>
+      <RevealStack>
+        <RevealItem className="relative mb-5 sm:mb-10">
+          <GreetingGlow />
+          <p className="text-[10px] uppercase tracking-[0.32em] text-muted-foreground sm:text-[11px]">
+            Hub · Espace client
+          </p>
+          <h1 className="mt-2 font-heading text-2xl font-light tracking-tight sm:mt-3 sm:text-4xl">
+            Bonjour,{" "}
+            <span className="text-gradient-neon-animated">{displayName}</span>.
+          </h1>
+          <p className="mt-1.5 hidden max-w-xl text-sm text-muted-foreground sm:mt-2 sm:block">
+            Suis l'avancement de tes productions et récupère tes livrables ici.
+          </p>
+        </RevealItem>
 
       {/* INVOICES — en premier sur mobile : action prioritaire */}
       {invoices.length > 0 ? (
-        <section className="mb-6 space-y-3 sm:mb-10">
+        <RevealItem className="mb-6 space-y-3 sm:mb-10">
           <h2 className="font-heading text-lg font-light tracking-wide sm:text-xl">
             Factures
           </h2>
@@ -155,7 +159,7 @@ export default async function ClientPage() {
                 (p) => p.id === inv.project_id,
               )?.name;
               return (
-                <li key={inv.id} className="glass-panel rounded-xl p-4">
+                <li key={inv.id} className="glass-panel lift-on-hover rounded-xl p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
@@ -206,17 +210,17 @@ export default async function ClientPage() {
               );
             })}
           </ul>
-        </section>
+        </RevealItem>
       ) : null}
 
       {/* DELIVERABLES — videos, exports, briefs… */}
       {deliverables.length > 0 ? (
-        <section className="mb-6 space-y-3 sm:mb-10 sm:space-y-4">
+        <RevealItem className="mb-6 space-y-3 sm:mb-10 sm:space-y-4">
           <h2 className="font-heading text-lg font-light tracking-wide sm:text-xl">
             Livrables à télécharger
           </h2>
           {Array.from(deliverablesByProject.entries()).map(([pid, files]) => (
-            <div key={pid} className="glass-panel rounded-xl p-3 sm:rounded-2xl sm:p-5">
+            <div key={pid} className="glass-panel lift-on-hover rounded-xl p-3 sm:rounded-2xl sm:p-5">
               <p className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground sm:mb-3 sm:text-[11px]">
                 Projet ·{" "}
                 <span className="text-foreground">
@@ -230,11 +234,11 @@ export default async function ClientPage() {
               </div>
             </div>
           ))}
-        </section>
+        </RevealItem>
       ) : null}
 
       {/* STATS — récap, après les actions prioritaires */}
-      <section className="mb-6 grid grid-cols-2 gap-2.5 sm:mb-10 sm:gap-4 lg:grid-cols-4">
+      <RevealItem className="mb-6 grid grid-cols-2 gap-2.5 sm:mb-10 sm:gap-4 lg:grid-cols-4">
         <StatCard
           icon={FolderOpen}
           label="Projets en cours"
@@ -260,9 +264,10 @@ export default async function ClientPage() {
               : undefined
           }
         />
-      </section>
+      </RevealItem>
 
       {/* PROJECTS — overview of upcoming production */}
+      <RevealItem>
       {projectsList.length === 0 ? (
         <div className="glass-panel rounded-2xl p-10 text-center">
           <FolderOpen className="mx-auto h-8 w-8 text-muted-foreground" />
@@ -282,7 +287,7 @@ export default async function ClientPage() {
           {projectsList.map((p) => (
             <div
               key={p.id}
-              className="glass-panel rounded-xl p-3 sm:rounded-2xl sm:p-5"
+              className="glass-panel lift-on-hover rounded-xl p-3 sm:rounded-2xl sm:p-5"
             >
               <h3 className="font-heading text-base font-medium sm:text-lg">
                 {p.name}
@@ -331,6 +336,8 @@ export default async function ClientPage() {
           ))}
         </section>
       )}
+      </RevealItem>
+      </RevealStack>
     </DashboardShell>
   );
 }
