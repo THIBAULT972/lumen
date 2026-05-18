@@ -2,6 +2,12 @@ import { google } from "@ai-sdk/google";
 import { generateObject } from "ai";
 import { z } from "zod";
 
+// Désactive le "thinking" mode de Gemini 2.5 Flash (sinon il consomme
+// jusqu'à 24k tokens avant la sortie → JSON tronqué).
+const GEMINI_NO_THINKING = {
+  google: { thinkingConfig: { thinkingBudget: 0 } },
+} as const;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Stratégie : à la création, on génère UNIQUEMENT la structure du projet
 // (theme + approche + ton + audience + moodboard prompts). Pas d'épisodes
@@ -217,27 +223,51 @@ export async function generateProjectDraft(
     }
   }
 
-  // Jusqu'à 2 essais. Le schéma simplifié devrait passer du 1er coup
-  // dans la quasi-totalité des cas.
+  // Stratégie de retry avec 2 modèles différents et thinking désactivé.
+  // Gemini 2.5 Flash a un mode "thinking" activé par défaut qui consomme
+  // jusqu'à 24k tokens AVANT de produire la sortie — ça tronque le JSON.
+  // On le désactive explicitement et on fallback sur 2.0 Flash si 2.5 rate.
+  const attempts = [
+    {
+      label: "2.5-flash (thinking off)",
+      model: google("gemini-2.5-flash"),
+      providerOptions: GEMINI_NO_THINKING,
+    },
+    {
+      label: "2.0-flash",
+      model: google("gemini-2.0-flash"),
+      providerOptions: undefined,
+    },
+    {
+      label: "2.5-flash (thinking off, 2nd try)",
+      model: google("gemini-2.5-flash"),
+      providerOptions: GEMINI_NO_THINKING,
+    },
+  ];
+
   let lastError: unknown = null;
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < attempts.length; i++) {
+    const att = attempts[i];
     try {
       const { object } = await generateObject({
-        model: google("gemini-2.5-flash"),
+        model: att.model,
         schema: projectSchema,
         system: SYSTEM_PROMPT,
         messages: [{ role: "user", content: userParts }],
         maxOutputTokens: 16_384,
+        providerOptions: att.providerOptions,
       });
       if (i > 0) {
-        console.warn(`[ai] generateProjectDraft OK au retry ${i + 1}/2`);
+        console.warn(
+          `[ai] generateProjectDraft OK avec ${att.label} (essai ${i + 1}/${attempts.length})`,
+        );
       }
       return { ok: true, draft: object };
     } catch (e) {
       lastError = e;
       const msg = e instanceof Error ? e.message : String(e);
       console.warn(
-        `[ai] generateProjectDraft échec ${i + 1}/2 : ${msg.slice(0, 300)}`,
+        `[ai] generateProjectDraft échec avec ${att.label} (essai ${i + 1}/${attempts.length}) : ${msg.slice(0, 400)}`,
       );
       if (isFatalError(msg)) break;
     }

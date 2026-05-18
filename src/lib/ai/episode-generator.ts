@@ -2,6 +2,14 @@ import { google } from "@ai-sdk/google";
 import { generateObject } from "ai";
 import { z } from "zod";
 
+// Désactive le "thinking" mode de Gemini 2.5 Flash (sinon il consomme
+// jusqu'à 24k tokens avant la sortie → JSON tronqué).
+// Typage strict du SDK exige Record<string, JSONObject> ; on utilise
+// `as const` pour qu'inférence donne le bon shape.
+const GEMINI_NO_THINKING = {
+  google: { thinkingConfig: { thinkingBudget: 0 } },
+} as const;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Génération d'UNE émission enrichie pour un projet existant.
 // Cet appel est lancé depuis la page projet, à la demande, quand le
@@ -220,11 +228,31 @@ export async function generateEpisodeDraft(
     .filter((x): x is string => x !== null)
     .join("\n");
 
+  // Même stratégie que generateProjectDraft : thinking off + fallback 2.0.
+  const attempts = [
+    {
+      label: "2.5-flash (thinking off)",
+      model: google("gemini-2.5-flash"),
+      providerOptions: GEMINI_NO_THINKING,
+    },
+    {
+      label: "2.0-flash",
+      model: google("gemini-2.0-flash"),
+      providerOptions: undefined,
+    },
+    {
+      label: "2.5-flash (thinking off, 2nd try)",
+      model: google("gemini-2.5-flash"),
+      providerOptions: GEMINI_NO_THINKING,
+    },
+  ];
+
   let lastError: unknown = null;
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < attempts.length; i++) {
+    const att = attempts[i];
     try {
       const { object } = await generateObject({
-        model: google("gemini-2.5-flash"),
+        model: att.model,
         schema: episodeDraftSchema,
         system: SYSTEM_PROMPT,
         messages: [
@@ -234,16 +262,19 @@ export async function generateEpisodeDraft(
           },
         ],
         maxOutputTokens: 16_384,
+        providerOptions: att.providerOptions,
       });
       if (i > 0) {
-        console.warn(`[ai] generateEpisodeDraft OK au retry ${i + 1}/2`);
+        console.warn(
+          `[ai] generateEpisodeDraft OK avec ${att.label} (essai ${i + 1}/${attempts.length})`,
+        );
       }
       return { ok: true, draft: object };
     } catch (e) {
       lastError = e;
       const msg = e instanceof Error ? e.message : String(e);
       console.warn(
-        `[ai] generateEpisodeDraft échec ${i + 1}/2 : ${msg.slice(0, 300)}`,
+        `[ai] generateEpisodeDraft échec avec ${att.label} (essai ${i + 1}/${attempts.length}) : ${msg.slice(0, 400)}`,
       );
       const lower = msg.toLowerCase();
       if (
