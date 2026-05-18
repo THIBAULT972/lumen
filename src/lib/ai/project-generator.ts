@@ -35,10 +35,10 @@ const scriptSchema = z.object({
     ),
   sections: z
     .array(scriptSectionSchema)
-    .min(2)
+    .min(1)
     .max(8)
     .describe(
-      "Découpage du contenu en sections séquentielles. 3 à 6 sections recommandé.",
+      "Découpage du contenu en sections séquentielles. 3 à 6 sections recommandé (mais 1 minimum si c'est une capsule très courte).",
     ),
   cta: z
     .string()
@@ -124,22 +124,24 @@ const episodeSchema = z.object({
     .describe(
       "Profils d'intervenants suggérés (pas des noms réels — des descriptions de profil : 'chef cuisinier créole 30-40 ans', 'historien spécialiste de l'esclavage').",
     ),
-  script: scriptSchema.describe(
-    "Script structuré : hook d'ouverture, sections séquentielles avec dialogues/contenu, call-to-action de fin.",
-  ),
+  script: scriptSchema
+    .optional()
+    .describe(
+      "Script structuré : hook d'ouverture, sections séquentielles avec dialogues/contenu, call-to-action de fin. À fournir si tu as assez de matière, sinon omet.",
+    ),
   shots: z
     .array(shotSchema)
-    .min(3)
     .max(12)
+    .optional()
     .describe(
-      "Shot list : 4 à 10 plans clés à capturer pour cet épisode. Mix de types pour avoir de la variété au montage.",
+      "Shot list : 4 à 10 plans clés à capturer pour cet épisode. Mix de types pour avoir de la variété au montage. À fournir si tu as assez de matière.",
     ),
   visual_prompts: z
     .array(z.string().max(200))
-    .min(2)
     .max(4)
+    .optional()
     .describe(
-      "Prompts EN ANGLAIS pour générer des images d'illustration ou moodboard. Style descriptif, cinématographique, riche en détails visuels (couleurs, lumière, angle, ambiance). Ex: 'cinematic shot of a Caribbean chef plating a colorful seafood dish, warm golden hour light, shallow depth of field, 35mm film aesthetic'. 2 à 4 prompts par épisode.",
+      "Prompts EN ANGLAIS pour générer des images d'illustration. Style cinématographique riche en détails (couleurs, lumière, angle, ambiance). Ex: 'cinematic shot of a Caribbean chef plating a colorful seafood dish, warm golden hour light, shallow depth of field, 35mm film aesthetic'. 2 à 4 prompts si tu en proposes.",
     ),
 });
 
@@ -166,23 +168,25 @@ const draftSchema = z.object({
     .describe(
       "Description du projet en 2 à 4 phrases, claire et orientée prod (le ton, l'angle, la cible).",
     ),
-  // ── New project-level enrichments ────────────────────────────────────────
+  // ── New project-level enrichments (best-effort, peuvent être omis) ──────
   target_audience: z
     .string()
     .max(200)
+    .optional()
     .describe(
       "Persona cible : âge, intérêts, plateforme principale, contexte. 1-2 phrases.",
     ),
   tone: z
     .string()
     .max(140)
+    .optional()
     .describe(
       "Ton éditorial : intimiste / punchy / contemplatif / didactique / fun / premium / etc. Mots-clés courts.",
     ),
   moodboard_prompts: z
     .array(z.string().max(200))
-    .min(3)
     .max(5)
+    .optional()
     .describe(
       "Prompts EN ANGLAIS pour générer 3-5 images de moodboard représentant l'ambiance visuelle du projet. Style cinématographique riche : couleurs dominantes, lumière, textures, références implicites. Ex: 'cinematic moodboard, sun-drenched Caribbean coastline at dusk, terracotta and indigo palette, 35mm film grain, atmospheric haze'.",
     ),
@@ -237,37 +241,41 @@ const SYSTEM_PROMPT = `Tu es l'assistant créatif de LUMEN, studio de production
 
 L'équipe : 3 producteurs (Thibault, Meghane, Anthony) + des prestataires freelance (cameraman, droniste, monteur, photographe) + parfois des clients tiers. Production en français/créole, contenus pour TV / réseaux sociaux / marques.
 
-Quand un producteur te décrit une idée (texte, PDF, ou les deux), tu génères un BROUILLON DE PROJET COMPLET — pas une coquille vide. Le brouillon doit servir de point de départ travaillé : on doit pouvoir le lire et avoir l'impression d'avoir un quasi-pitch deck.
+Quand un producteur te décrit une idée (texte, PDF, ou les deux), tu génères un BROUILLON DE PROJET le plus complet possible compte tenu du contexte fourni.
 
-## Ce que tu produis pour le PROJET
-- Nom court (max 80 char), accrocheur, prononçable.
-- Type : 'client' si client tiers explicite, sinon 'media' (production interne).
-- Description : 2-4 phrases, ton concret prod.
-- Target audience : décris le persona en 1-2 phrases (âge, intérêts, plateforme principale).
-- Tone : 3-5 mots-clés stylistiques (intimiste, punchy, premium, didactique, fun, etc.).
-- 3 à 5 moodboard prompts EN ANGLAIS, cinématographiques, riches en détails visuels (couleurs, lumière, textures, ambiance, références implicites). Ces prompts vont nourrir un générateur d'images.
-- Production tips : 3-5 conseils prod concrets et actionnables (équipement, lieu, timing, contraintes).
-- Inspiration references : 2-4 réfs ciné/photo/montage concrètes.
+## Champs OBLIGATOIRES
+- name : nom court (max 80 char), accrocheur, prononçable.
+- kind : 'client' si client tiers explicite, sinon 'media' (production interne).
+- description : 2-4 phrases, ton concret prod.
+- episodes : au moins 1 émission avec name, description, format, platforms (vide si non précisé).
+- recommendedSkills : au moins une compétence prestataire utile (vide [] si vraiment rien).
 
-## Ce que tu produis pour CHAQUE ÉMISSION
-- Nom + synopsis (1-2 phrases) + format + plateformes.
-- Durée estimée en minutes (adapte au format).
-- Lieu de tournage suggéré (1 seul, le plus pertinent — pense local Martinique).
-- Profils d'intervenants suggérés (descriptions de profil, pas de vrais noms).
-- SCRIPT STRUCTURÉ :
-  - Hook : les 10-15 premières secondes, ce qui capte l'attention.
-  - Sections : 3 à 6 sections séquentielles avec heading + contenu (3-8 phrases par section, du concret : ce qui est dit/montré, dialogues clés). Pour chaque section, propose 2-4 plans b-roll d'illustration.
-  - CTA : call-to-action de fin.
-- SHOT LIST : 4 à 10 plans clés (types de plan + description de ce qui est filmé). Varie les types pour avoir du rythme au montage.
-- VISUAL PROMPTS EN ANGLAIS : 2-4 prompts cinématographiques pour images d'illustration de cet épisode spécifique.
+## Champs RECOMMANDÉS (remplis-les si tu as la matière)
+Niveau projet :
+- target_audience : persona en 1-2 phrases.
+- tone : 3-5 mots-clés stylistiques.
+- moodboard_prompts : 3-5 prompts EN ANGLAIS cinématographiques pour images d'ambiance.
+- production_tips : 3-5 conseils prod actionnables.
+- inspiration_references : 2-4 réfs ciné/photo concrètes.
+
+Niveau épisode :
+- duration_minutes, location_suggestion, guests_suggestion.
+- script structuré : hook + 2-6 sections (avec b-roll si tu veux) + cta.
+- shots : 4-10 plans dans le vocabulaire ciné.
+- visual_prompts : 2-4 prompts EN ANGLAIS pour images de cet épisode.
+
+## Stratégie selon la richesse du brief
+- **Brief très court (1-2 phrases)** : remplis les OBLIGATOIRES correctement, et fais au moins le moodboard + persona + ton. Pour le script/shots/visual_prompts, propose-les si tu peux raisonner dessus, sinon omet ces champs (ils sont optionnels). Mieux vaut omettre que d'inventer du flou.
+- **Brief moyen (un paragraphe)** : remplis tout, en restant cohérent avec le contexte.
+- **Brief riche (long texte ou PDF)** : sors un quasi-pitch deck, ultra-concret.
 
 ## Règles d'or
-- Sois concret et détaillé. Pas de "un sujet à creuser" ou "à définir". Si tu n'as pas l'info, prends une décision créative et fais.
-- Pense local Martinique quand pertinent (lieux, culture, langue, cuisine, histoire).
-- Les visual_prompts et moodboard_prompts sont EN ANGLAIS — c'est ce qui marche le mieux avec les générateurs d'images.
-- Style cinéma : pense lumière, palette, profondeur de champ, format de pellicule (35mm, 16mm), grain.
+- Sois CONCRET. Pas de "à définir", pas de "à creuser".
+- Pense local Martinique quand pertinent (lieux, culture, langue, cuisine, histoire, politique).
+- visual_prompts et moodboard_prompts sont EN ANGLAIS — c'est ce qui marche le mieux avec les générateurs d'images. Style cinéma : lumière, palette, focale, grain.
 - Réponds en français pour tout le reste.
-- Si l'utilisateur fournit un PDF (brief, dossier de prod), lis-le attentivement ET respecte ses contraintes spécifiques.`;
+- Si l'utilisateur fournit un PDF, lis-le attentivement et respecte ses contraintes spécifiques.
+- IMPORTANT : ne te bloque jamais sur une contrainte impossible. Si tu ne peux pas générer 3 moodboard_prompts cohérents, omets le champ entier plutôt que de mettre du remplissage.`;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Entry point
@@ -372,7 +380,7 @@ export async function generateProjectDraft(
       return {
         ok: false,
         error:
-          "L'IA n'a pas pu structurer ta demande. Sois plus explicite : décris au moins 1-2 idées d'émissions, le ton, et qui regarde.",
+          "L'IA a renvoyé une réponse incomplète (probablement saturée par le contexte). Réessaie tel quel — souvent ça passe au 2e essai. Sinon, donne un peu plus de contexte (ton, audience, idée d'épisode).",
       };
     }
     if (lower.includes("payload") || lower.includes("size")) {
