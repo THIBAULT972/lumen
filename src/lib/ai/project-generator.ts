@@ -311,47 +311,100 @@ export async function generateProjectDraft(
     };
   }
 
-  try {
-    const userParts: (
-      | { type: "text"; text: string }
-      | { type: "file"; data: Uint8Array; mediaType: string }
-    )[] = [];
+  const userParts: (
+    | { type: "text"; text: string }
+    | { type: "file"; data: Uint8Array; mediaType: string }
+  )[] = [];
 
-    if (trimmedIdea) {
-      userParts.push({ type: "text", text: trimmedIdea });
-    }
-    if (hasAttachment) {
+  if (trimmedIdea) {
+    userParts.push({ type: "text", text: trimmedIdea });
+  }
+  if (hasAttachment) {
+    userParts.push({
+      type: "file",
+      data: input.attachment!.bytes,
+      mediaType: input.attachment!.mimeType,
+    });
+    if (!trimmedIdea) {
       userParts.push({
-        type: "file",
-        data: input.attachment!.bytes,
-        mediaType: input.attachment!.mimeType,
+        type: "text",
+        text:
+          "Analyse ce document et propose un brouillon de projet basé sur son contenu.",
       });
-      if (!trimmedIdea) {
-        userParts.push({
-          type: "text",
-          text:
-            "Analyse ce document et propose un brouillon de projet basé sur son contenu.",
-        });
-      }
     }
+  }
 
-    const { object } = await generateObject({
-      // On garde Flash : plus rapide + gratuit, et largement capable pour ce
-      // niveau de structuration. Si la qualité descend avec le schéma plus
-      // riche, on basculera sur gemini-2.5-pro (payant mais sensiblement
-      // meilleur en créativité longue).
-      model: google("gemini-2.5-flash"),
-      schema: draftSchema,
-      system: SYSTEM_PROMPT,
-      messages: [
+  /**
+   * Tente la génération. Gemini Flash est non-déterministe et notre schéma
+   * est riche → on s'autorise jusqu'à 3 essais avant d'abandonner. Entre
+   * chaque retry on ajoute une consigne de plus en plus stricte sur la
+   * concision pour éviter la troncature de sortie.
+   */
+  const attempts: { hint: string }[] = [
+    { hint: "" },
+    { hint: "Reste concis sur les sections optionnelles (script, shots, visual_prompts) — quelques éléments solides valent mieux qu'un long remplissage incomplet." },
+    { hint: "Concentre-toi sur l'essentiel : name, kind, description, episodes (au moins 1 avec name+synopsis+format+platforms), recommendedSkills. Tout le reste est optionnel — omets si tu dois saturer la sortie." },
+  ];
+
+  let lastError: unknown = null;
+
+  for (let i = 0; i < attempts.length; i++) {
+    const attempt = attempts[i];
+    try {
+      const messages = [
         {
-          role: "user",
+          role: "user" as const,
           content: userParts,
         },
-      ],
-    });
-    return { ok: true, draft: object };
-  } catch (e) {
+        ...(attempt.hint
+          ? [
+              {
+                role: "user" as const,
+                content: [{ type: "text" as const, text: attempt.hint }],
+              },
+            ]
+          : []),
+      ];
+
+      const { object } = await generateObject({
+        // Flash : gratuit + suffisamment capable. maxOutputTokens augmenté
+        // à 32k car le schéma riche peut générer beaucoup de JSON et le
+        // défaut Gemini (8k) provoque des troncatures → no object generated.
+        model: google("gemini-2.5-flash"),
+        schema: draftSchema,
+        system: SYSTEM_PROMPT,
+        messages,
+        maxOutputTokens: 32_768,
+      });
+      if (i > 0) {
+        console.warn(`[ai] generateProjectDraft réussi au retry ${i + 1}/${attempts.length}`);
+      }
+      return { ok: true, draft: object };
+    } catch (e) {
+      lastError = e;
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn(
+        `[ai] generateProjectDraft échec ${i + 1}/${attempts.length}: ${msg.slice(0, 300)}`,
+      );
+      // Si c'est une erreur "non récupérable" (location, quota, payload),
+      // on n'insiste pas — on sort tout de suite avec le bon message.
+      const lower = msg.toLowerCase();
+      if (
+        msg.includes("RESOURCE_EXHAUSTED") ||
+        msg.includes("429") ||
+        lower.includes("location is not supported") ||
+        lower.includes("permission_denied") ||
+        lower.includes("payload")
+      ) {
+        break;
+      }
+      // Sinon : on retry avec un hint supplémentaire.
+    }
+  }
+
+  // Si on arrive ici, tous les essais ont échoué.
+  {
+    const e = lastError;
     const msg = e instanceof Error ? e.message : "Erreur inconnue.";
     const lower = msg.toLowerCase();
 
@@ -380,7 +433,7 @@ export async function generateProjectDraft(
       return {
         ok: false,
         error:
-          "L'IA a renvoyé une réponse incomplète (probablement saturée par le contexte). Réessaie tel quel — souvent ça passe au 2e essai. Sinon, donne un peu plus de contexte (ton, audience, idée d'épisode).",
+          "Gemini n'arrive pas à structurer la réponse même après 3 essais. C'est probablement une limite du modèle Flash sur ce schéma riche. Tu peux réessayer dans quelques minutes (Gemini varie), ou raccourcir/restructurer ta demande pour qu'elle soit plus directe (1 émission claire, 1 ton, 1 cible).",
       };
     }
     if (lower.includes("payload") || lower.includes("size")) {
