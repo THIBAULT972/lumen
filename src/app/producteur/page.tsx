@@ -21,6 +21,15 @@ const EPISODE_STATUS_LABEL: Record<string, string> = {
   delivered: "Livré",
   published: "Publié",
 };
+// Badge ultra-court (3-4 char) pour les feeds mobile
+const EPISODE_STATUS_SHORT: Record<string, string> = {
+  idea: "IDÉ",
+  preprod: "PRÉ",
+  shooting: "TRG",
+  editing: "MTG",
+  delivered: "LIV",
+  published: "PUB",
+};
 const EPISODE_STATUS_CLASS: Record<string, string> = {
   idea: "border-foreground/15 bg-foreground/[0.04] text-muted-foreground",
   preprod: "border-[oklch(0.65_0.22_258/0.5)] bg-[oklch(0.5_0.22_258/0.18)] text-[oklch(0.88_0.18_258)]",
@@ -42,6 +51,14 @@ const MISSION_STATUS_LABEL: Record<string, string> = {
   completed: "Terminée",
   cancelled: "Annulée",
 };
+const MISSION_STATUS_SHORT: Record<string, string> = {
+  draft: "BRO",
+  broadcast: "DIF",
+  accepted: "ACC",
+  in_progress: "ENC",
+  completed: "OK",
+  cancelled: "ANN",
+};
 
 const INVOICE_STATUS_LABEL: Record<string, string> = {
   draft: "Brouillon",
@@ -49,6 +66,13 @@ const INVOICE_STATUS_LABEL: Record<string, string> = {
   paid: "Payée",
   overdue: "En retard",
   cancelled: "Annulée",
+};
+const INVOICE_STATUS_SHORT: Record<string, string> = {
+  draft: "BRO",
+  sent: "ÉMI",
+  paid: "OK",
+  overdue: "RTD",
+  cancelled: "ANN",
 };
 const INVOICE_STATUS_CLASS: Record<string, string> = {
   draft: "border-foreground/15 bg-foreground/[0.04] text-muted-foreground",
@@ -121,26 +145,26 @@ export default async function ProducteurPage() {
       .from("profiles")
       .select("id", { count: "exact", head: true })
       .eq("role", "client"),
-    // Recent episodes (limit 5)
+    // Recent episodes (limit 3)
     supabase
       .from("episodes")
       .select("id, name, status, project_id, production_date, updated_at")
       .order("updated_at", { ascending: false })
-      .limit(5),
-    // Recent missions (limit 5)
+      .limit(3),
+    // Recent missions (limit 3)
     supabase
       .from("missions")
       .select("id, title, status, location, scheduled_at, updated_at, episode_id")
       .order("updated_at", { ascending: false })
-      .limit(5),
-    // Recent invoices (limit 4)
+      .limit(3),
+    // Recent invoices (limit 3)
     supabase
       .from("invoices")
       .select(
         "id, project_id, number, status, issued_at, total_ttc_cents, updated_at",
       )
       .order("updated_at", { ascending: false })
-      .limit(4),
+      .limit(3),
     // For looking up project names
     supabase.from("projects").select("id, name"),
   ]);
@@ -223,7 +247,7 @@ export default async function ProducteurPage() {
         {/* Épisodes récents */}
         <FeedCard
           icon={Video}
-          title="Émissions récentes"
+          title="Émissions"
           href="/producteur/projets"
           empty="Pas encore d'émission planifiée."
           isEmpty={recentEpisodes.length === 0}
@@ -232,26 +256,26 @@ export default async function ProducteurPage() {
             <Link
               key={ep.id}
               href={`/producteur/projets/${ep.project_id}`}
-              className="block rounded-lg border border-foreground/[0.06] bg-foreground/[0.02] p-2.5 transition-colors hover:bg-foreground/[0.06]"
+              className="flex min-w-0 items-center gap-2 rounded-lg border border-foreground/[0.06] bg-foreground/[0.02] p-2 transition-colors hover:bg-foreground/[0.06]"
             >
-              <div className="flex flex-wrap items-center gap-2">
-                <span
-                  className={cn(
-                    "inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-medium uppercase tracking-wider",
-                    EPISODE_STATUS_CLASS[ep.status] ??
-                      EPISODE_STATUS_CLASS.idea,
-                  )}
-                >
-                  {EPISODE_STATUS_LABEL[ep.status] ?? ep.status}
-                </span>
-                <span className="text-[10px] text-muted-foreground">
+              <span
+                title={EPISODE_STATUS_LABEL[ep.status] ?? ep.status}
+                className={cn(
+                  "shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider",
+                  EPISODE_STATUS_CLASS[ep.status] ?? EPISODE_STATUS_CLASS.idea,
+                )}
+              >
+                {EPISODE_STATUS_SHORT[ep.status] ?? ep.status.slice(0, 3).toUpperCase()}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium leading-tight">
+                  {ep.name}
+                </p>
+                <p className="truncate text-[10px] text-muted-foreground">
+                  {projectNameById.get(ep.project_id) ?? "—"} ·{" "}
                   {timeAgo(ep.updated_at)}
-                </span>
+                </p>
               </div>
-              <p className="mt-1 truncate text-sm font-medium">{ep.name}</p>
-              <p className="truncate text-[11px] text-muted-foreground">
-                {projectNameById.get(ep.project_id) ?? "—"}
-              </p>
             </Link>
           ))}
         </FeedCard>
@@ -259,7 +283,7 @@ export default async function ProducteurPage() {
         {/* Missions récentes */}
         <FeedCard
           icon={Briefcase}
-          title="Missions récentes"
+          title="Missions"
           href="/producteur/projets"
           empty="Aucune mission pour l'instant."
           isEmpty={recentMissions.length === 0}
@@ -274,23 +298,29 @@ export default async function ProducteurPage() {
                 href={
                   projectId ? `/producteur/projets/${projectId}` : "/producteur/projets"
                 }
-                className="block rounded-lg border border-foreground/[0.06] bg-foreground/[0.02] p-2.5 transition-colors hover:bg-foreground/[0.06]"
+                className="flex min-w-0 items-center gap-2 rounded-lg border border-foreground/[0.06] bg-foreground/[0.02] p-2 transition-colors hover:bg-foreground/[0.06]"
               >
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center rounded-full border border-foreground/15 bg-foreground/[0.04] px-2 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
-                    {MISSION_STATUS_LABEL[m.status] ?? m.status}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground">
-                    {timeAgo(m.updated_at)}
-                  </span>
+                <span
+                  title={MISSION_STATUS_LABEL[m.status] ?? m.status}
+                  className="shrink-0 rounded-full border border-foreground/15 bg-foreground/[0.04] px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground"
+                >
+                  {MISSION_STATUS_SHORT[m.status] ?? m.status.slice(0, 3).toUpperCase()}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium leading-tight">
+                    {m.title}
+                  </p>
+                  <p className="truncate text-[10px] text-muted-foreground">
+                    {m.scheduled_at
+                      ? new Date(m.scheduled_at).toLocaleDateString("fr-FR", {
+                          timeZone: "America/Martinique",
+                          day: "2-digit",
+                          month: "short",
+                        })
+                      : "—"}{" "}
+                    · {timeAgo(m.updated_at)}
+                  </p>
                 </div>
-                <p className="mt-1 truncate text-sm font-medium">{m.title}</p>
-                <p className="truncate text-[11px] text-muted-foreground">
-                  {m.location ?? "Lieu non précisé"}
-                  {m.scheduled_at
-                    ? ` · ${new Date(m.scheduled_at).toLocaleDateString("fr-FR", { timeZone: "America/Martinique", day: "2-digit", month: "short" })}`
-                    : ""}
-                </p>
               </Link>
             );
           })}
@@ -299,7 +329,7 @@ export default async function ProducteurPage() {
         {/* Factures récentes */}
         <FeedCard
           icon={FileText}
-          title="Factures récentes"
+          title="Factures"
           href="/producteur/projets"
           empty="Aucune facture pour l'instant."
           isEmpty={recentInvoices.length === 0}
@@ -308,30 +338,29 @@ export default async function ProducteurPage() {
             <Link
               key={inv.id}
               href={`/producteur/projets/${inv.project_id}/facturation`}
-              className="block rounded-lg border border-foreground/[0.06] bg-foreground/[0.02] p-2.5 transition-colors hover:bg-foreground/[0.06]"
+              className="flex min-w-0 items-center gap-2 rounded-lg border border-foreground/[0.06] bg-foreground/[0.02] p-2 transition-colors hover:bg-foreground/[0.06]"
             >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span
-                    className={cn(
-                      "inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-medium uppercase tracking-wider",
-                      INVOICE_STATUS_CLASS[inv.status] ??
-                        INVOICE_STATUS_CLASS.draft,
-                    )}
-                  >
-                    {INVOICE_STATUS_LABEL[inv.status] ?? inv.status}
-                  </span>
-                  <span className="font-mono text-xs">{inv.number}</span>
-                </div>
-                <span className="font-mono text-xs tabular-nums">
-                  {eurosFromCents(inv.total_ttc_cents)}
-                </span>
+              <span
+                title={INVOICE_STATUS_LABEL[inv.status] ?? inv.status}
+                className={cn(
+                  "shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider",
+                  INVOICE_STATUS_CLASS[inv.status] ??
+                    INVOICE_STATUS_CLASS.draft,
+                )}
+              >
+                {INVOICE_STATUS_SHORT[inv.status] ?? inv.status.slice(0, 3).toUpperCase()}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-mono text-xs leading-tight">
+                  {inv.number}
+                </p>
+                <p className="truncate text-[10px] text-muted-foreground">
+                  {projectNameById.get(inv.project_id) ?? "—"}
+                </p>
               </div>
-              <p className="mt-1 truncate text-[11px] text-muted-foreground">
-                {projectNameById.get(inv.project_id) ?? "—"}
-                {" · "}
-                {timeAgo(inv.updated_at)}
-              </p>
+              <span className="shrink-0 font-mono text-xs tabular-nums">
+                {eurosFromCents(inv.total_ttc_cents)}
+              </span>
             </Link>
           ))}
         </FeedCard>
