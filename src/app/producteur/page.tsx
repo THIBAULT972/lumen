@@ -1,79 +1,210 @@
+import Link from "next/link";
 import {
   Briefcase,
   FolderOpen,
   Users,
   UserCircle,
-  CalendarDays,
-  Bell,
+  Video,
+  FileText,
+  ArrowRight,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { StatCard } from "@/components/dashboard/stat-card";
+import { cn } from "@/lib/utils";
+import { MeetingSummaryButton } from "./meeting-summary-dialog";
+
+const EPISODE_STATUS_LABEL: Record<string, string> = {
+  idea: "Idée",
+  preprod: "En préparation",
+  shooting: "En tournage",
+  editing: "En montage",
+  delivered: "Livré",
+  published: "Publié",
+};
+const EPISODE_STATUS_CLASS: Record<string, string> = {
+  idea: "border-foreground/15 bg-foreground/[0.04] text-muted-foreground",
+  preprod: "border-[oklch(0.65_0.22_258/0.5)] bg-[oklch(0.5_0.22_258/0.18)] text-[oklch(0.88_0.18_258)]",
+  shooting:
+    "border-[oklch(0.65_0.22_50/0.5)] bg-[oklch(0.5_0.22_50/0.18)] text-[oklch(0.88_0.18_50)]",
+  editing:
+    "border-[oklch(0.7_0.22_310/0.5)] bg-[oklch(0.5_0.22_310/0.18)] text-[oklch(0.88_0.18_310)]",
+  delivered:
+    "border-[oklch(0.65_0.2_140/0.5)] bg-[oklch(0.5_0.18_140/0.18)] text-[oklch(0.85_0.18_140)]",
+  published:
+    "border-[oklch(0.7_0.22_280/0.5)] bg-[oklch(0.5_0.22_280/0.18)] text-[oklch(0.88_0.18_280)]",
+};
+
+const MISSION_STATUS_LABEL: Record<string, string> = {
+  draft: "Brouillon",
+  broadcast: "Diffusée",
+  accepted: "Acceptée",
+  in_progress: "En cours",
+  completed: "Terminée",
+  cancelled: "Annulée",
+};
+
+const INVOICE_STATUS_LABEL: Record<string, string> = {
+  draft: "Brouillon",
+  sent: "Émise",
+  paid: "Payée",
+  overdue: "En retard",
+  cancelled: "Annulée",
+};
+const INVOICE_STATUS_CLASS: Record<string, string> = {
+  draft: "border-foreground/15 bg-foreground/[0.04] text-muted-foreground",
+  sent: "border-[oklch(0.65_0.22_258/0.5)] bg-[oklch(0.5_0.22_258/0.18)] text-[oklch(0.88_0.18_258)]",
+  paid: "border-[oklch(0.65_0.2_140/0.5)] bg-[oklch(0.5_0.18_140/0.18)] text-[oklch(0.85_0.18_140)]",
+  overdue: "border-destructive/30 bg-destructive/10 text-destructive",
+  cancelled: "border-foreground/15 bg-foreground/[0.04] text-muted-foreground",
+};
+
+function eurosFromCents(cents: number): string {
+  return new Intl.NumberFormat("fr-FR", {
+    style: "currency",
+    currency: "EUR",
+  }).format(cents / 100);
+}
+
+function timeAgo(iso: string): string {
+  const d = new Date(iso);
+  const diff = Date.now() - d.getTime();
+  const m = Math.floor(diff / 60_000);
+  if (m < 1) return "à l'instant";
+  if (m < 60) return `il y a ${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `il y a ${h} h`;
+  const days = Math.floor(h / 24);
+  if (days < 7) return `il y a ${days} j`;
+  return d.toLocaleDateString("fr-FR", {
+    timeZone: "America/Martinique",
+    day: "2-digit",
+    month: "short",
+  });
+}
 
 export default async function ProducteurPage() {
   const supabase = await createClient();
 
-  // Auth + role guard handled by /producteur/layout.tsx.
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [profileRes, projectsRes, missionsRes, prestatairesRes, clientsRes] =
-    await Promise.all([
-      supabase
-        .from("profiles")
-        .select("first_name, last_name, email")
-        .eq("id", user!.id)
-        .single(),
-      supabase
-        .from("projects")
-        .select("id", { count: "exact", head: true })
-        .is("archived_at", null),
-      supabase
-        .from("missions")
-        .select("id", { count: "exact", head: true })
-        .in("status", ["broadcast", "accepted", "in_progress"]),
-      supabase
-        .from("profiles")
-        .select("id", { count: "exact", head: true })
-        .eq("role", "prestataire"),
-      supabase
-        .from("profiles")
-        .select("id", { count: "exact", head: true })
-        .eq("role", "client"),
-    ]);
+  const [
+    profileRes,
+    projectsRes,
+    missionsRes,
+    prestatairesRes,
+    clientsRes,
+    recentEpisodesRes,
+    recentMissionsRes,
+    recentInvoicesRes,
+    projectsForLookupRes,
+  ] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("first_name, last_name, email")
+      .eq("id", user!.id)
+      .single(),
+    supabase
+      .from("projects")
+      .select("id", { count: "exact", head: true })
+      .is("archived_at", null),
+    supabase
+      .from("missions")
+      .select("id", { count: "exact", head: true })
+      .in("status", ["broadcast", "accepted", "in_progress"]),
+    supabase
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("role", "prestataire"),
+    supabase
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("role", "client"),
+    // Recent episodes (limit 5)
+    supabase
+      .from("episodes")
+      .select("id, name, status, project_id, production_date, updated_at")
+      .order("updated_at", { ascending: false })
+      .limit(5),
+    // Recent missions (limit 5)
+    supabase
+      .from("missions")
+      .select("id, title, status, location, scheduled_at, updated_at, episode_id")
+      .order("updated_at", { ascending: false })
+      .limit(5),
+    // Recent invoices (limit 4)
+    supabase
+      .from("invoices")
+      .select(
+        "id, project_id, number, status, issued_at, total_ttc_cents, updated_at",
+      )
+      .order("updated_at", { ascending: false })
+      .limit(4),
+    // For looking up project names
+    supabase.from("projects").select("id, name"),
+  ]);
 
   const displayName =
     [profileRes.data?.first_name, profileRes.data?.last_name]
       .filter(Boolean)
       .join(" ") || profileRes.data?.email || "Producteur";
 
+  const projectNameById = new Map<string, string>(
+    (projectsForLookupRes.data ?? []).map((p) => [p.id as string, p.name as string]),
+  );
+
+  // Build episode → project name lookup for missions feed
+  const episodeIdToProject = new Map<string, string>();
+  if (recentMissionsRes.data && recentMissionsRes.data.length > 0) {
+    const episodeIds = Array.from(
+      new Set(
+        recentMissionsRes.data
+          .map((m) => m.episode_id)
+          .filter((x): x is string => Boolean(x)),
+      ),
+    );
+    if (episodeIds.length > 0) {
+      const { data: eps } = await supabase
+        .from("episodes")
+        .select("id, project_id")
+        .in("id", episodeIds);
+      for (const ep of eps ?? []) {
+        episodeIdToProject.set(ep.id as string, ep.project_id as string);
+      }
+    }
+  }
+
+  const recentEpisodes = recentEpisodesRes.data ?? [];
+  const recentMissions = recentMissionsRes.data ?? [];
+  const recentInvoices = recentInvoicesRes.data ?? [];
+
   return (
     <>
-      <section className="mb-10">
-        <p className="text-[11px] uppercase tracking-[0.32em] text-muted-foreground">
+      <section className="mb-6 sm:mb-10">
+        <p className="text-[10px] uppercase tracking-[0.32em] text-muted-foreground sm:text-[11px]">
           Studio · Vue d'ensemble
         </p>
-        <h1 className="mt-3 font-heading text-4xl font-light tracking-tight">
-          Bienvenue, <span className="text-gradient-neon">{displayName}</span>.
+        <h1 className="mt-2 font-heading text-2xl font-light tracking-tight sm:mt-3 sm:text-4xl">
+          Bienvenue,{" "}
+          <span className="text-gradient-neon">{displayName}</span>.
         </h1>
-        <p className="mt-2 max-w-xl text-sm text-muted-foreground">
+        <p className="mt-1.5 hidden max-w-xl text-sm text-muted-foreground sm:mt-2 sm:block">
           Pilote tes projets, dispatche tes missions et garde un œil sur toute
           l'équipe depuis cet espace.
         </p>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="mb-6 grid grid-cols-2 gap-2.5 sm:mb-10 sm:gap-4 lg:grid-cols-4">
         <StatCard
           icon={FolderOpen}
           label="Projets actifs"
           value={String(projectsRes.count ?? 0)}
-          hint={(projectsRes.count ?? 0) === 0 ? "Aucun projet pour l'instant" : undefined}
         />
         <StatCard
           icon={Briefcase}
           label="Missions en cours"
           value={String(missionsRes.count ?? 0)}
-          hint={(missionsRes.count ?? 0) === 0 ? "Aucune mission active" : undefined}
         />
         <StatCard
           icon={Users}
@@ -87,51 +218,174 @@ export default async function ProducteurPage() {
         />
       </section>
 
-      <section className="mt-10 grid gap-4 lg:grid-cols-3">
-        <PlaceholderCard
-          icon={CalendarDays}
-          title="Calendrier"
-          body="Visualise tes dates de production et de parution, filtrées par projet."
-          eta="Phase 4"
-        />
-        <PlaceholderCard
+      {/* Activité récente */}
+      <section className="mb-6 grid gap-3 sm:mb-10 sm:gap-4 lg:grid-cols-3">
+        {/* Épisodes récents */}
+        <FeedCard
+          icon={Video}
+          title="Émissions récentes"
+          href="/producteur/projets"
+          empty="Pas encore d'émission planifiée."
+          isEmpty={recentEpisodes.length === 0}
+        >
+          {recentEpisodes.map((ep) => (
+            <Link
+              key={ep.id}
+              href={`/producteur/projets/${ep.project_id}`}
+              className="block rounded-lg border border-foreground/[0.06] bg-foreground/[0.02] p-2.5 transition-colors hover:bg-foreground/[0.06]"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className={cn(
+                    "inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-medium uppercase tracking-wider",
+                    EPISODE_STATUS_CLASS[ep.status] ??
+                      EPISODE_STATUS_CLASS.idea,
+                  )}
+                >
+                  {EPISODE_STATUS_LABEL[ep.status] ?? ep.status}
+                </span>
+                <span className="text-[10px] text-muted-foreground">
+                  {timeAgo(ep.updated_at)}
+                </span>
+              </div>
+              <p className="mt-1 truncate text-sm font-medium">{ep.name}</p>
+              <p className="truncate text-[11px] text-muted-foreground">
+                {projectNameById.get(ep.project_id) ?? "—"}
+              </p>
+            </Link>
+          ))}
+        </FeedCard>
+
+        {/* Missions récentes */}
+        <FeedCard
           icon={Briefcase}
-          title="Dispatch de missions"
-          body="Crée une mission, choisis la compétence requise, envoie-la à tous les prestataires concernés."
-          eta="Phase 2.3"
-        />
-        <PlaceholderCard
-          icon={Bell}
-          title="Notifications temps réel"
-          body="Sois alerté dès qu'un prestataire accepte ou refuse une mission."
-          eta="Phase 4"
-        />
+          title="Missions récentes"
+          href="/producteur/projets"
+          empty="Aucune mission pour l'instant."
+          isEmpty={recentMissions.length === 0}
+        >
+          {recentMissions.map((m) => {
+            const projectId = m.episode_id
+              ? episodeIdToProject.get(m.episode_id)
+              : null;
+            return (
+              <Link
+                key={m.id}
+                href={
+                  projectId ? `/producteur/projets/${projectId}` : "/producteur/projets"
+                }
+                className="block rounded-lg border border-foreground/[0.06] bg-foreground/[0.02] p-2.5 transition-colors hover:bg-foreground/[0.06]"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center rounded-full border border-foreground/15 bg-foreground/[0.04] px-2 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
+                    {MISSION_STATUS_LABEL[m.status] ?? m.status}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">
+                    {timeAgo(m.updated_at)}
+                  </span>
+                </div>
+                <p className="mt-1 truncate text-sm font-medium">{m.title}</p>
+                <p className="truncate text-[11px] text-muted-foreground">
+                  {m.location ?? "Lieu non précisé"}
+                  {m.scheduled_at
+                    ? ` · ${new Date(m.scheduled_at).toLocaleDateString("fr-FR", { timeZone: "America/Martinique", day: "2-digit", month: "short" })}`
+                    : ""}
+                </p>
+              </Link>
+            );
+          })}
+        </FeedCard>
+
+        {/* Factures récentes */}
+        <FeedCard
+          icon={FileText}
+          title="Factures récentes"
+          href="/producteur/projets"
+          empty="Aucune facture pour l'instant."
+          isEmpty={recentInvoices.length === 0}
+        >
+          {recentInvoices.map((inv) => (
+            <Link
+              key={inv.id}
+              href={`/producteur/projets/${inv.project_id}/facturation`}
+              className="block rounded-lg border border-foreground/[0.06] bg-foreground/[0.02] p-2.5 transition-colors hover:bg-foreground/[0.06]"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className={cn(
+                      "inline-flex items-center rounded-full border px-2 py-0.5 text-[9px] font-medium uppercase tracking-wider",
+                      INVOICE_STATUS_CLASS[inv.status] ??
+                        INVOICE_STATUS_CLASS.draft,
+                    )}
+                  >
+                    {INVOICE_STATUS_LABEL[inv.status] ?? inv.status}
+                  </span>
+                  <span className="font-mono text-xs">{inv.number}</span>
+                </div>
+                <span className="font-mono text-xs tabular-nums">
+                  {eurosFromCents(inv.total_ttc_cents)}
+                </span>
+              </div>
+              <p className="mt-1 truncate text-[11px] text-muted-foreground">
+                {projectNameById.get(inv.project_id) ?? "—"}
+                {" · "}
+                {timeAgo(inv.updated_at)}
+              </p>
+            </Link>
+          ))}
+        </FeedCard>
+      </section>
+
+      {/* Compte-rendu de réunion (Gemini) */}
+      <section className="mb-4">
+        <MeetingSummaryButton />
       </section>
     </>
   );
 }
 
-function PlaceholderCard({
+function FeedCard({
   icon: Icon,
   title,
-  body,
-  eta,
+  href,
+  empty,
+  isEmpty,
+  children,
 }: {
-  icon: typeof CalendarDays;
+  icon: typeof Briefcase;
   title: string;
-  body: string;
-  eta: string;
+  href: string;
+  empty: string;
+  isEmpty: boolean;
+  children: React.ReactNode;
 }) {
   return (
-    <div className="glass-panel relative overflow-hidden rounded-2xl p-6">
-      <div className="absolute right-4 top-4 rounded-full border border-foreground/10 bg-foreground/[0.03] px-2 py-0.5 text-[9px] uppercase tracking-[0.2em] text-muted-foreground">
-        {eta}
+    <div className="glass-panel flex flex-col rounded-xl p-3 sm:rounded-2xl sm:p-5">
+      <div className="mb-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-foreground/10 bg-foreground/[0.03] sm:h-8 sm:w-8">
+            <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+          </div>
+          <h3 className="font-heading text-sm font-medium sm:text-base">
+            {title}
+          </h3>
+        </div>
+        <Link
+          href={href}
+          className="text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+          aria-label={`Tout voir : ${title}`}
+        >
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
       </div>
-      <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-foreground/10 bg-foreground/[0.03]">
-        <Icon className="h-4 w-4 text-muted-foreground" />
-      </div>
-      <h3 className="mt-5 font-heading text-lg font-medium">{title}</h3>
-      <p className="mt-2 text-sm text-muted-foreground">{body}</p>
+      {isEmpty ? (
+        <p className="rounded-lg border border-dashed border-foreground/10 px-3 py-6 text-center text-xs text-muted-foreground">
+          {empty}
+        </p>
+      ) : (
+        <div className="space-y-1.5">{children}</div>
+      )}
     </div>
   );
 }

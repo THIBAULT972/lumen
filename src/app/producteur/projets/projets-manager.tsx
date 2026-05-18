@@ -63,6 +63,7 @@ import type {
   Project,
   ClientOption,
   ProducteurOption,
+  ProjectKindFilter,
 } from "./page";
 import { AiProjectDialog } from "./ai-project-dialog";
 
@@ -76,6 +77,9 @@ export function ProjetsManager({
   showArchived,
   archivedCount,
   activeCount,
+  kindFilter,
+  clientCount,
+  mediaCount,
 }: {
   projects: Project[];
   clients: ClientOption[];
@@ -84,6 +88,9 @@ export function ProjetsManager({
   showArchived: boolean;
   archivedCount: number;
   activeCount: number;
+  kindFilter: ProjectKindFilter;
+  clientCount: number;
+  mediaCount: number;
 }) {
   const [addOpen, setAddOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
@@ -92,24 +99,60 @@ export function ProjetsManager({
 
   return (
     <>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+      {/* Filtres : archivage (Actifs/Archivés) + type (Tous/Client/Média) */}
+      <div className="mb-4 flex flex-wrap items-center gap-2 sm:mb-6 sm:gap-3">
         <div className="flex gap-1 rounded-full border border-foreground/10 bg-foreground/[0.02] p-1 text-xs">
           <FilterPill
-            href="/producteur/projets"
+            href={kindFilter === "all" ? "/producteur/projets" : `/producteur/projets?type=${kindFilter}`}
             active={!showArchived}
             label="Actifs"
             count={activeCount}
           />
           <FilterPill
-            href="/producteur/projets?archived=1"
+            href={
+              kindFilter === "all"
+                ? "/producteur/projets?archived=1"
+                : `/producteur/projets?archived=1&type=${kindFilter}`
+            }
             active={showArchived}
             label="Archivés"
             count={archivedCount}
           />
         </div>
 
+        <div className="flex gap-1 rounded-full border border-foreground/10 bg-foreground/[0.02] p-1 text-xs">
+          <FilterPill
+            href={
+              showArchived ? "/producteur/projets?archived=1" : "/producteur/projets"
+            }
+            active={kindFilter === "all"}
+            label="Tous"
+            count={clientCount + mediaCount}
+          />
+          <FilterPill
+            href={
+              showArchived
+                ? "/producteur/projets?archived=1&type=client"
+                : "/producteur/projets?type=client"
+            }
+            active={kindFilter === "client"}
+            label="Client"
+            count={clientCount}
+          />
+          <FilterPill
+            href={
+              showArchived
+                ? "/producteur/projets?archived=1&type=media"
+                : "/producteur/projets?type=media"
+            }
+            active={kindFilter === "media"}
+            label="Média"
+            count={mediaCount}
+          />
+        </div>
+
         {!showArchived ? (
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="ml-auto flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               onClick={() => setAiOpen(true)}

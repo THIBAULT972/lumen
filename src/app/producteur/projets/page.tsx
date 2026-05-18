@@ -28,13 +28,17 @@ export type ProducteurOption = {
   last_name: string | null;
 };
 
+export type ProjectKindFilter = "all" | "client" | "media";
+
 export default async function ProjetsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ archived?: string }>;
+  searchParams: Promise<{ archived?: string; type?: string }>;
 }) {
   const sp = await searchParams;
   const showArchived = sp.archived === "1";
+  const kindFilter: ProjectKindFilter =
+    sp.type === "client" || sp.type === "media" ? sp.type : "all";
 
   const supabase = await createClient();
 
@@ -119,9 +123,23 @@ export default async function ProjetsPage({
     };
   });
 
-  const visible = projects.filter((p) =>
-    showArchived ? p.archived_at !== null : p.archived_at === null,
-  );
+  // Filtre archivage
+  const matchesArchive = (p: Project) =>
+    showArchived ? p.archived_at !== null : p.archived_at === null;
+
+  // Filtre type (Client / Média)
+  const matchesKind = (p: Project) => {
+    if (kindFilter === "client") return p.client_id !== null;
+    if (kindFilter === "media") return p.client_id === null;
+    return true;
+  };
+
+  const visible = projects.filter((p) => matchesArchive(p) && matchesKind(p));
+
+  // Counts par type pour l'onglet actif (utile pour les pills)
+  const sameArchiveScope = projects.filter(matchesArchive);
+  const clientCount = sameArchiveScope.filter((p) => p.client_id !== null).length;
+  const mediaCount = sameArchiveScope.filter((p) => p.client_id === null).length;
 
   return (
     <>
@@ -147,6 +165,9 @@ export default async function ProjetsPage({
         showArchived={showArchived}
         archivedCount={projects.filter((p) => p.archived_at !== null).length}
         activeCount={projects.filter((p) => p.archived_at === null).length}
+        kindFilter={kindFilter}
+        clientCount={clientCount}
+        mediaCount={mediaCount}
       />
     </>
   );
