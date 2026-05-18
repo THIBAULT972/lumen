@@ -7,18 +7,12 @@ import {
   generateProjectDraft as runGenerator,
   type ProjectDraft,
 } from "@/lib/ai/project-generator";
-import {
-  generateEpisodeDraft,
-  type EpisodeFullDraft,
-  type ProjectContext,
-} from "@/lib/ai/episode-generator";
 
 type Result<T = void> =
   | ({ ok: true } & (T extends void ? object : T))
   | { ok: false; error: string };
 
 export type DraftResult = Result<{ draft: ProjectDraft }>;
-export type EpisodeDraftResult = Result<{ draft: EpisodeFullDraft }>;
 
 const STORAGE_BUCKET = "files";
 const MAX_AI_PDF_SIZE = 20 * 1024 * 1024; // 20 MB (Gemini inline safe ceiling)
@@ -176,28 +170,12 @@ export async function createProjectFromAiDraft(input: {
 
   const admin = createAdminClient();
 
-  // Capture le brief projet complet (theme, approche, audience, ton,
-  // moodboard prompts, tips, refs, skills). Tout stocké en jsonb pour rester
-  // libre côté schéma sans nouvelle migration.
-  const projectBrief = {
-    theme: draft.theme,
-    production_approach: draft.production_approach,
-    target_audience: draft.target_audience,
-    tone: draft.tone,
-    moodboard_prompts: draft.moodboard_prompts,
-    production_tips: draft.production_tips,
-    inspiration_references: draft.inspiration_references,
-    recommended_skills: draft.recommendedSkills,
-    notes: draft.notes ?? null,
-  };
-
   const { data: project, error: projErr } = await admin
     .from("projects")
     .insert({
       name: draft.name.trim(),
       description: draft.description.trim() || null,
       client_id: draft.kind === "client" ? clientId ?? null : null,
-      ai_brief: projectBrief,
       created_by: guard.user.id,
     })
     .select("id")
@@ -217,11 +195,8 @@ export async function createProjectFromAiDraft(input: {
     };
   }
 
-  // Idées d'épisodes : SI l'IA en a proposées (PDF riche ou brief détaillé),
-  // on les crée comme épisodes basiques en `idea`. Le producteur pourra
-  // ensuite enrichir chacune via "Suggérer avec l'IA" sur la page épisode.
-  if (draft.episode_ideas && draft.episode_ideas.length > 0) {
-    const rows = draft.episode_ideas.map((ep, idx) => ({
+  if (draft.episodes.length > 0) {
+    const rows = draft.episodes.map((ep, idx) => ({
       project_id: project.id,
       name: ep.name.trim(),
       description: ep.description.trim() || null,
@@ -232,121 +207,11 @@ export async function createProjectFromAiDraft(input: {
     }));
     const { error: epErr } = await admin.from("episodes").insert(rows);
     if (epErr) {
-      console.warn("[AI] episode_ideas insert error:", epErr.message);
+      console.warn("[AI] episodes insert error:", epErr.message);
     }
   }
 
   revalidatePath("/producteur/projets");
   revalidatePath("/producteur");
   return { ok: true, projectId: project.id };
-}
-
-// ----------------------------------------------------------------------------
-// EPISODE ENRICHMENT — generate a full episode from a project context
-// ----------------------------------------------------------------------------
-
-/**
- * Generates a fully-detailed episode draft for an existing project.
- * The caller passes the project id + the episode "idea" (a short prompt).
- * The server fetches the project brief and feeds it as context to Gemini.
- *
- * NB: this does NOT persist anything. The UI gets the draft, lets the user
- * tweak it, then calls `createEpisodeFromAiDraft` to actually insert.
- */
-export async function generateEpisodeForProject(input: {
-  projectId: string;
-  idea: string;
-}): Promise<EpisodeDraftResult> {
-  const guard = await getProducteur();
-  if (!guard.ok) return guard;
-
-  const admin = createAdminClient();
-  const { data: project, error: projErr } = await admin
-    .from("projects")
-    .select("id, name, description, ai_brief")
-    .eq("id", input.projectId)
-    .maybeSingle();
-  if (projErr || !project) {
-    return { ok: false, error: "Projet introuvable." };
-  }
-
-  const brief = (project.ai_brief ?? {}) as Record<string, unknown>;
-  const asString = (k: string): string | null => {
-    const v = brief[k];
-    return typeof v === "string" && v.trim().length > 0 ? v : null;
-  };
-  const asStringArray = (k: string): string[] => {
-    const v = brief[k];
-    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
-  };
-
-  const context: ProjectContext = {
-    name: project.name,
-    description: project.description,
-    theme: asString("theme"),
-    production_approach: asString("production_approach"),
-    target_audience: asString("target_audience"),
-    tone: asString("tone"),
-    inspiration_references: asStringArray("inspiration_references"),
-    recommendedSkills: asStringArray("recommended_skills"),
-  };
-
-  const result = await generateEpisodeDraft(context, input.idea);
-  if (!result.ok) return { ok: false, error: result.error };
-  return { ok: true, draft: result.draft };
-}
-
-/**
- * Persists an episode draft as a real episode row, with its rich brief
- * stored in `episodes.ai_brief`.
- */
-export async function createEpisodeFromAiDraft(input: {
-  projectId: string;
-  draft: EpisodeFullDraft;
-}): Promise<Result<{ episodeId: string }>> {
-  const guard = await getProducteur();
-  if (!guard.ok) return guard;
-
-  const admin = createAdminClient();
-
-  // Append at the end of the existing order.
-  const { data: existing } = await admin
-    .from("episodes")
-    .select("order_index")
-    .eq("project_id", input.projectId)
-    .order("order_index", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  const orderIndex = existing?.order_index != null ? existing.order_index + 1 : 0;
-
-  const { data: episode, error } = await admin
-    .from("episodes")
-    .insert({
-      project_id: input.projectId,
-      name: input.draft.name.trim(),
-      description: input.draft.description.trim() || null,
-      format: input.draft.format || null,
-      platforms: input.draft.platforms ?? [],
-      status: "idea" as const,
-      order_index: orderIndex,
-      duration_minutes: input.draft.duration_minutes ?? null,
-      location: input.draft.location_suggestion?.trim() || null,
-      guests: input.draft.guests_suggestion ?? [],
-      ai_brief: {
-        script: input.draft.script,
-        shots: input.draft.shots,
-        visual_prompts: input.draft.visual_prompts,
-        location_suggestion: input.draft.location_suggestion ?? null,
-        guests_suggestion: input.draft.guests_suggestion ?? [],
-      },
-    })
-    .select("id")
-    .single();
-  if (error || !episode) {
-    return { ok: false, error: error?.message ?? "Erreur création épisode." };
-  }
-
-  revalidatePath(`/producteur/projets/${input.projectId}`);
-  revalidatePath("/producteur");
-  return { ok: true, episodeId: episode.id };
 }

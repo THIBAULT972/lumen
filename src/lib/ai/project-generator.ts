@@ -2,173 +2,92 @@ import { google } from "@ai-sdk/google";
 import { generateObject } from "ai";
 import { z } from "zod";
 
-// Désactive le "thinking" mode de Gemini 2.5 Flash (sinon il consomme
-// jusqu'à 24k tokens avant la sortie → JSON tronqué).
-const GEMINI_NO_THINKING = {
-  google: { thinkingConfig: { thinkingBudget: 0 } },
-} as const;
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Stratégie : à la création, on génère UNIQUEMENT la structure du projet
-// (theme + approche + ton + audience + moodboard prompts). Pas d'épisodes
-// obligatoires. L'enrichissement par épisode se fait plus tard, à la demande,
-// via `generateEpisodeFromIdea` (autre fichier).
-//
-// Si l'utilisateur fournit un PDF (brief, dossier de prod), l'IA peut
-// proposer 0-5 idées d'épisodes basiques, sans script ni shots — juste des
-// pistes que le producteur transformera ensuite en émissions enrichies.
-// ─────────────────────────────────────────────────────────────────────────────
-
-// Épisode "idée" — juste un titre + synopsis + format proposé. Pas de script
-// ni shot list à ce stade. Le producteur enrichira chacun à la demande.
-const episodeIdeaSchema = z.object({
-  name: z.string().max(80).describe("Titre de l'émission."),
-  description: z
-    .string()
-    .max(280)
-    .describe("Synopsis en 1-2 phrases. Concret."),
-  format: z
-    .enum([
-      "Reportage",
-      "Interview",
-      "Capsule",
-      "Documentaire",
-      "Live",
-      "Tutoriel",
-      "Autre",
-    ])
-    .describe("Format de production suggéré."),
-  platforms: z
-    .array(z.string().max(40))
-    .max(5)
-    .optional()
-    .describe("Plateformes de diffusion suggérées."),
-});
-
-const projectSchema = z.object({
+const draftSchema = z.object({
   name: z
     .string()
     .min(2)
     .max(80)
-    .describe("Nom court, accrocheur, prononçable. Pas générique."),
+    .describe(
+      "Nom court et accrocheur du projet (max 80 caractères). Ex: 'Histwa', 'Cash Culte S2'.",
+    ),
   kind: z
     .enum(["client", "media"])
     .describe(
-      "'client' si l'utilisateur a clairement mentionné un client tiers, sinon 'media'.",
+      "'client' si l'utilisateur a clairement mentionné qu'il y a un client tiers à livrer, sinon 'media' (production interne du studio).",
     ),
   description: z
     .string()
     .max(500)
     .describe(
-      "Description du projet en 2-4 phrases. Concrète, orientée prod.",
+      "Description du projet en 2 à 4 phrases, claire et orientée prod (le ton, l'angle, la cible).",
     ),
-  theme: z
-    .string()
-    .max(280)
-    .describe(
-      "Sujet/angle du projet en 1-2 phrases. Qu'est-ce qu'on traite, vu sous quel angle ? Ex: 'Vulgariser le fonctionnement de la politique martiniquaise auprès des jeunes via des décryptages courts et des micros-trottoirs'.",
-    ),
-  production_approach: z
-    .string()
-    .max(400)
-    .describe(
-      "FAÇON DE TOURNER : où, comment, avec quel équipement type, quel style visuel. 3-5 phrases concrètes. Ex: 'Plateau studio avec présentateur, micros-trottoirs en extérieur (Fort-de-France marchand, université Schoelcher), interviews d'experts en plan resserré, B-roll de débats à l'assemblée, archives INA. Caméra Sony FX3, gimbal pour les rues, plans dynamiques mais cadre stable au plateau.'",
-    ),
-  target_audience: z
-    .string()
-    .max(280)
-    .describe(
-      "Persona cible précis : âge, intérêts, plateforme principale, habitudes de consommation média. 1-2 phrases.",
-    ),
-  tone: z
-    .string()
-    .max(140)
-    .describe(
-      "Ton éditorial en 3-5 mots-clés ou une phrase courte. Ex: 'punchy, pédagogique, sans jargon'.",
-    ),
-  moodboard_prompts: z
-    .array(z.string().max(200))
-    .min(3)
-    .max(5)
-    .describe(
-      "3 à 5 prompts EN ANGLAIS pour générer des images de moodboard cinématographiques. Style riche : couleurs dominantes, lumière, textures, références visuelles implicites. Ex: 'cinematic moodboard, young Caribbean people debating politics in a sunlit cafe, warm terracotta and indigo palette, 35mm film grain, documentary style'.",
-    ),
-  production_tips: z
-    .array(z.string().max(200))
-    .min(2)
-    .max(6)
-    .describe(
-      "Conseils prod actionnables : équipement spécifique, timing optimal, lieux à privilégier, contraintes à anticiper.",
-    ),
-  inspiration_references: z
-    .array(z.string().max(140))
+  episodes: z
+    .array(
+      z.object({
+        name: z
+          .string()
+          .max(80)
+          .describe("Titre de l'émission (ex: 'Épisode 1 — Sainte-Anne')"),
+        description: z
+          .string()
+          .max(280)
+          .describe("Synopsis en 1 à 2 phrases."),
+        format: z
+          .enum([
+            "Reportage",
+            "Interview",
+            "Capsule",
+            "Documentaire",
+            "Live",
+            "Tutoriel",
+            "Autre",
+          ])
+          .describe("Format de production."),
+        platforms: z
+          .array(z.string())
+          .max(5)
+          .describe(
+            "Plateformes de diffusion suggérées (YouTube, Instagram, TikTok, TF1, France 3, etc.).",
+          ),
+      }),
+    )
     .min(1)
-    .max(4)
-    .describe(
-      "Références concrètes : chaîne YouTube, doc, photographe, style de montage. Ex: 'Brut.', 'Hugo Décrypte', 'docs Arte Reportage', 'photographie Annie Leibovitz'.",
-    ),
-  recommendedSkills: z
-    .array(z.string().max(40))
-    .min(2)
     .max(8)
     .describe(
-      "Compétences prestataires recommandées (ex: 'Droniste', 'Cadreur 4K', 'Monteur', 'Photographe', 'Motion designer').",
+      "Liste d'émissions concrètes (au moins 1, idéalement 3 à 6).",
     ),
-  // Idées d'épisodes : OPTIONNEL. Pas d'obligation pour ne pas saturer la
-  // génération. Si PDF fourni ou prompt riche, Gemini peut proposer 0-5
-  // pistes que le producteur ajoutera ensuite via "Suggérer une émission".
-  episode_ideas: z
-    .array(episodeIdeaSchema)
-    .max(5)
-    .optional()
+  recommendedSkills: z
+    .array(z.string())
+    .max(8)
     .describe(
-      "PISTES d'émissions (0-5). Si le brief est riche (PDF, paragraphe détaillé), propose 3-5 angles différents. Si le brief est court, omet ce champ — le producteur ajoutera les émissions une par une via 'Suggérer avec l'IA'.",
+      "Compétences prestataires recommandées (ex: 'Droniste', 'Cadreur 4K', 'Monteur', 'Photographe').",
     ),
   notes: z
     .string()
     .max(400)
     .optional()
     .describe(
-      "Conseils additionnels au producteur (logistique, contraintes spécifiques, idées créatives non couvertes ailleurs).",
+      "Conseils additionnels (lieux, ton, contraintes, équipement) — court.",
     ),
 });
 
-export type EpisodeIdea = z.infer<typeof episodeIdeaSchema>;
-export type ProjectDraft = z.infer<typeof projectSchema>;
+export type ProjectDraft = z.infer<typeof draftSchema>;
 
-const SYSTEM_PROMPT = `Tu es l'assistant créatif de LUMEN, studio de production audiovisuelle basé en Martinique.
+const SYSTEM_PROMPT = `Tu es l'assistant de production de LUMEN, une plateforme de coordination pour un studio de production audiovisuelle basé en Martinique.
 
-L'équipe : 3 producteurs (Thibault, Meghane, Anthony) + des prestataires freelance + parfois des clients tiers. Production en français/créole, contenus pour TV / réseaux sociaux / marques.
+Le studio travaille principalement en français (et créole occasionnellement), produit des contenus pour la télévision, les réseaux sociaux, et des marques. L'équipe : 3 producteurs (Thibault, Meghane, Anthony) + des prestataires freelance (cameraman, droniste, monteur, photographe, etc.) + parfois des clients tiers.
 
-À partir d'une idée (texte ou PDF), tu PROPOSES LA STRUCTURE D'UN PROJET. Pas les épisodes détaillés — juste le cadre qui guidera tout le reste.
+Quand un producteur te décrit une idée — par texte, par PDF, ou les deux — tu génères un BROUILLON STRUCTURÉ de projet :
+- Un nom court (max 80 char) et accrocheur
+- Le type : "client" s'il a explicitement parlé d'un client tiers, sinon "media" (production interne)
+- Une description claire de 2 à 4 phrases
+- 3 à 6 ÉMISSIONS concrètes proposées (titre + synopsis + format + plateformes suggérées)
+- Les compétences prestataires utiles
+- Quelques notes de prod si pertinent (lieux, équipement spécifique, contraintes)
 
-## Ce que tu produis OBLIGATOIREMENT
-- **name** : court, accrocheur, prononçable, mémorable. PAS générique ('Politique en Martinique' = mauvais ; 'Politik Péy' = bon).
-- **kind** : 'client' si client tiers explicite, sinon 'media'.
-- **description** : 2-4 phrases concrètes, orientées prod.
-- **theme** : le sujet/angle. Pas un résumé de la description, mais ce qui rend le projet UNIQUE.
-- **production_approach** : la FAÇON DE TOURNER. Où, comment, avec quel équipement type, quel style visuel. C'est la partie la plus utile au producteur — sois précis (lieux, types de plan, équipement).
-- **target_audience** : persona précis.
-- **tone** : 3-5 mots-clés stylistiques.
-- **moodboard_prompts** : 3-5 prompts EN ANGLAIS cinématographiques.
-- **production_tips** : 2-6 conseils actionnables.
-- **inspiration_references** : 1-4 réfs concrètes (noms de chaînes, photographes, docs, styles).
-- **recommendedSkills** : 2-8 compétences prestataires.
+Si on te fournit un PDF (brief, dossier de prod, présentation), lis-le attentivement (texte ET images) et base ton brouillon dessus. Si l'utilisateur ajoute aussi du texte, c'est une consigne supplémentaire à respecter en plus du contenu du PDF.
 
-## OPTIONNEL : episode_ideas
-Si le brief est riche (PDF, paragraphe détaillé avec plusieurs angles), tu peux proposer 3-5 PISTES d'émissions (titre + synopsis + format). Pas de script ni shot list à ce stade. Si le brief est court ou que tu n'as pas de matière pour des angles distincts cohérents, OMETS ce champ entier — le producteur ajoutera les émissions une par une plus tard avec un autre appel IA.
-
-## Règles d'or
-- Sois CONCRET. Pas de "à définir", pas de "à creuser".
-- Pense local Martinique quand pertinent (lieux, culture, politique, histoire, langue).
-- moodboard_prompts EN ANGLAIS, style cinéma (couleurs, lumière, focale, grain, mood).
-- Réponds en français pour le reste.
-- Si l'utilisateur fournit un PDF, lis-le attentivement ET respecte ses contraintes.
-- **N'ESSAIE PAS de remplir episode_ideas si tu n'as pas de matière** : c'est mieux d'omettre que d'inventer du flou.`;
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Entry point
-// ─────────────────────────────────────────────────────────────────────────────
+Sois concret et pratique. Pense local Martinique quand c'est pertinent. Réponds en français. Si l'utilisateur est vague, fais des choix créatifs solides plutôt que de demander des précisions — il pourra éditer ton brouillon.`;
 
 export type GeneratorInput = {
   idea: string;
@@ -200,124 +119,88 @@ export async function generateProjectDraft(
     };
   }
 
-  const userParts: (
-    | { type: "text"; text: string }
-    | { type: "file"; data: Uint8Array; mediaType: string }
-  )[] = [];
+  try {
+    const userParts: (
+      | { type: "text"; text: string }
+      | { type: "file"; data: Uint8Array; mediaType: string }
+    )[] = [];
 
-  if (trimmedIdea) {
-    userParts.push({ type: "text", text: trimmedIdea });
-  }
-  if (hasAttachment) {
-    userParts.push({
-      type: "file",
-      data: input.attachment!.bytes,
-      mediaType: input.attachment!.mimeType,
-    });
-    if (!trimmedIdea) {
+    if (trimmedIdea) {
+      userParts.push({ type: "text", text: trimmedIdea });
+    }
+    if (hasAttachment) {
       userParts.push({
-        type: "text",
-        text:
-          "Analyse ce document et propose une structure de projet basée sur son contenu.",
+        type: "file",
+        data: input.attachment!.bytes,
+        mediaType: input.attachment!.mimeType,
       });
-    }
-  }
-
-  // Quota gratuit Gemini = 10 RPM sur 2.5-flash, 15 RPM sur 2.0-flash. Chaque
-  // appel SDK fait par défaut 3 tentatives internes → on les coupe avec
-  // `maxRetries: 0` pour ne consommer qu'1 unité de quota par essai.
-  //
-  // 2.0-flash en premier car (a) quota plus généreux, (b) pas de thinking
-  // mode → comportement plus prévisible. Fallback 2.5-flash si 2.0 rate.
-  // 2 essais max au total pour ne pas brûler le quota inutilement.
-  const attempts = [
-    {
-      label: "2.0-flash",
-      model: google("gemini-2.0-flash"),
-      providerOptions: undefined,
-    },
-    {
-      label: "2.5-flash (thinking off)",
-      model: google("gemini-2.5-flash"),
-      providerOptions: GEMINI_NO_THINKING,
-    },
-  ];
-
-  let lastError: unknown = null;
-  for (let i = 0; i < attempts.length; i++) {
-    const att = attempts[i];
-    try {
-      const { object } = await generateObject({
-        model: att.model,
-        schema: projectSchema,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: "user", content: userParts }],
-        maxOutputTokens: 16_384,
-        providerOptions: att.providerOptions,
-        maxRetries: 0,
-      });
-      if (i > 0) {
-        console.warn(
-          `[ai] generateProjectDraft OK avec ${att.label} (essai ${i + 1}/${attempts.length})`,
-        );
+      if (!trimmedIdea) {
+        userParts.push({
+          type: "text",
+          text:
+            "Analyse ce document et propose un brouillon de projet basé sur son contenu.",
+        });
       }
-      return { ok: true, draft: object };
-    } catch (e) {
-      lastError = e;
-      const msg = e instanceof Error ? e.message : String(e);
-      console.warn(
-        `[ai] generateProjectDraft échec avec ${att.label} (essai ${i + 1}/${attempts.length}) : ${msg.slice(0, 400)}`,
-      );
-      // Sur 429 ou autre erreur fatale : on stoppe immédiatement, inutile
-      // de cramer le quota avec un retry qui va aussi rate-limit.
-      if (isFatalError(msg)) break;
     }
-  }
-  return { ok: false, error: humanizeError(lastError) };
-}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
+    const { object } = await generateObject({
+      model: google("gemini-2.5-flash"),
+      schema: draftSchema,
+      system: SYSTEM_PROMPT,
+      messages: [
+        {
+          role: "user",
+          content: userParts,
+        },
+      ],
+      // Désactive le 'thinking' de Gemini 2.5 (sinon il consomme 24k
+      // tokens INTERNES avant la sortie → JSON tronqué).
+      providerOptions: {
+        google: { thinkingConfig: { thinkingBudget: 0 } },
+      },
+      // Pas de retries internes du SDK : 1 appel = 1 unité de quota.
+      maxRetries: 0,
+    });
+    return { ok: true, draft: object };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Erreur inconnue.";
+    const lower = msg.toLowerCase();
 
-function isFatalError(msg: string): boolean {
-  const lower = msg.toLowerCase();
-  return (
-    msg.includes("RESOURCE_EXHAUSTED") ||
-    msg.includes("429") ||
-    lower.includes("location is not supported") ||
-    lower.includes("permission_denied") ||
-    lower.includes("payload")
-  );
-}
-
-function humanizeError(e: unknown): string {
-  const msg = e instanceof Error ? e.message : "Erreur inconnue.";
-  const lower = msg.toLowerCase();
-
-  if (msg.includes("RESOURCE_EXHAUSTED") || msg.includes("429")) {
-    // Essaie d'extraire le délai retry exact "retry in 17.42550157s"
-    const retryMatch = msg.match(/retry in ([\d.]+)s/i);
-    const seconds = retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : null;
-    return seconds
-      ? `Quota Gemini atteint (10 requêtes/min en gratuit). Réessaye dans ${seconds} secondes.`
-      : "Quota Gemini atteint (10 requêtes/min en gratuit). Réessaye dans ~1 minute.";
+    if (msg.includes("RESOURCE_EXHAUSTED") || msg.includes("429")) {
+      return {
+        ok: false,
+        error:
+          "Quota Google AI atteint (limite gratuite : 1500 requêtes/jour). Réessaie dans 1 minute.",
+      };
+    }
+    if (
+      lower.includes("user location is not supported") ||
+      lower.includes("location is not supported") ||
+      lower.includes("permission_denied")
+    ) {
+      return {
+        ok: false,
+        error:
+          "Google AI bloque ta région (probablement à cause d'un VPN). Désactive le VPN, ou teste cette feature en prod (Vercel) — leurs serveurs ne sont pas bloqués.",
+      };
+    }
+    if (
+      lower.includes("response did not match schema") ||
+      lower.includes("no object generated")
+    ) {
+      return {
+        ok: false,
+        error:
+          "L'IA n'a pas pu structurer ta demande. Sois plus explicite : décris au moins 1-2 idées d'émissions, le ton, et qui regarde.",
+      };
+    }
+    if (lower.includes("payload") || lower.includes("size")) {
+      return {
+        ok: false,
+        error:
+          "Le document est trop volumineux. Essaie un PDF plus léger (<20 Mo).",
+      };
+    }
+    return { ok: false, error: msg };
   }
-  if (
-    lower.includes("user location is not supported") ||
-    lower.includes("location is not supported") ||
-    lower.includes("permission_denied")
-  ) {
-    return "Google AI bloque ta région (probablement à cause d'un VPN). Désactive le VPN, ou teste cette feature en prod (Vercel).";
-  }
-  if (
-    lower.includes("response did not match schema") ||
-    lower.includes("no object generated")
-  ) {
-    return "Gemini a renvoyé une réponse incomplète. Réessaie — souvent ça passe au 2e essai.";
-  }
-  if (lower.includes("payload") || lower.includes("size")) {
-    return "Le document est trop volumineux. Essaie un PDF plus léger (<20 Mo).";
-  }
-  return msg;
 }
