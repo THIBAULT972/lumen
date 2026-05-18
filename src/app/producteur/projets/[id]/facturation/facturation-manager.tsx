@@ -267,6 +267,8 @@ function InvoiceRowCard({
   }
 
   const isDraft = invoice.status === "draft";
+  const isCancelled = invoice.status === "cancelled";
+  const isDeletable = isDraft || isCancelled;
 
   return (
     <li className="glass-panel rounded-xl p-4">
@@ -385,7 +387,7 @@ function InvoiceRowCard({
                   Annuler la facture
                 </DropdownMenuItem>
               ) : null}
-              {isDraft ? (
+              {isDeletable ? (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
@@ -395,7 +397,9 @@ function InvoiceRowCard({
                     }
                   >
                     <Trash2 className="mr-2 h-4 w-4" />
-                    Supprimer le brouillon
+                    {isDraft
+                      ? "Supprimer le brouillon"
+                      : "Supprimer définitivement"}
                   </DropdownMenuItem>
                 </>
               ) : null}

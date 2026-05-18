@@ -362,22 +362,30 @@ export async function deleteInvoice(
   const guard = await getProducteur();
   if (!guard.ok) return guard;
   const admin = createAdminClient();
-  // Hard delete only for drafts. For others, prefer "cancelled" to keep history.
+  // Hard delete : brouillons (jamais transmis) et factures annulées
+  // (l'annulation a déjà retiré la facture du parcours client). Les statuts
+  // sent / paid / overdue restent intouchables — passer par "Annuler" d'abord
+  // pour ces cas-là, ce qui les rend ensuite supprimables ici.
   const { data: row } = await admin
     .from("invoices")
     .select("status")
     .eq("id", invoiceId)
     .maybeSingle();
-  if (row?.status && row.status !== "draft") {
+  if (
+    row?.status &&
+    row.status !== "draft" &&
+    row.status !== "cancelled"
+  ) {
     return {
       ok: false,
       error:
-        "Seuls les brouillons peuvent être supprimés. Pour une facture envoyée, utilise 'Annuler'.",
+        "Seuls les brouillons et les factures annulées peuvent être supprimés. Annule d'abord la facture.",
     };
   }
   const { error } = await admin.from("invoices").delete().eq("id", invoiceId);
   if (error) return { ok: false, error: error.message };
   revalidatePath(`/producteur/projets/${projectId}/facturation`);
+  revalidatePath("/client");
   return { ok: true };
 }
 
