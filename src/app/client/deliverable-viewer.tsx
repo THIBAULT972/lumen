@@ -92,7 +92,42 @@ export function ClientDeliverableViewer({ file }: { file: FileRecord }) {
         setError(r.error);
         return;
       }
-      window.open(r.url, "_blank", "noopener");
+
+      // ⚠ Sur Safari iOS, `window.open(signedUrl)` ouvre la vidéo en
+      // lecture dans un nouvel onglet au lieu de la télécharger, MÊME si
+      // le serveur envoie `Content-Disposition: attachment`. Safari
+      // ignore le header pour les types media qu'il sait lire.
+      //
+      // Solution : on `fetch()` le fichier nous-même, on le transforme en
+      // Blob (devient une URL `blob://` same-origin), puis on simule un
+      // clic sur un `<a download>`. L'attribut `download` étant
+      // same-origin sur un blob URL, Safari iOS le respecte cette fois et
+      // affiche la bannière de download standard.
+      //
+      // Tradeoff : tout le fichier transite par la RAM du browser. Sur le
+      // plan Free Supabase, le max par fichier est 50 Mo donc OK. Si on
+      // passe en Pro avec des fichiers > 1 Go, il faudra un Service
+      // Worker ou downloader via location.href.
+      try {
+        const resp = await fetch(r.url);
+        if (!resp.ok) {
+          throw new Error(`HTTP ${resp.status}`);
+        }
+        const blob = await resp.blob();
+        const objUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = objUrl;
+        a.download = r.filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        // Délai avant revoke pour laisser le browser démarrer le download
+        // (sur Safari iOS le download est asynchrone et lit l'URL après).
+        setTimeout(() => URL.revokeObjectURL(objUrl), 2000);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Erreur réseau";
+        setError(`Téléchargement échoué : ${msg}`);
+      }
     });
   }
 
