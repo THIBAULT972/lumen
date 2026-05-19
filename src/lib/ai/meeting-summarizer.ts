@@ -124,6 +124,12 @@ export async function summarizeMeeting(
           content: [{ type: "text", text: trimmed }],
         },
       ],
+      // Désactive le thinking de 2.5 Flash (sinon il consomme 24k tokens
+      // internes avant la sortie → JSON tronqué).
+      providerOptions: {
+        google: { thinkingConfig: { thinkingBudget: 0 } },
+      },
+      maxRetries: 0,
     });
     return { ok: true, summary: object };
   } catch (e) {

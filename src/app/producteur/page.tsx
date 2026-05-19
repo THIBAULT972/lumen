@@ -7,6 +7,7 @@ import {
   Video,
   FileText,
   ArrowRight,
+  Sparkles,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { StatCard } from "@/components/dashboard/stat-card";
@@ -123,6 +124,7 @@ export default async function ProducteurPage() {
     recentMissionsRes,
     recentInvoicesRes,
     projectsForLookupRes,
+    recentMeetingsRes,
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -167,6 +169,14 @@ export default async function ProducteurPage() {
       .limit(3),
     // For looking up project names
     supabase.from("projects").select("id, name"),
+    // Recent meeting reports (limit 3)
+    supabase
+      .from("meeting_reports")
+      .select(
+        "id, title, source_type, status, summary, created_at, error_message",
+      )
+      .order("created_at", { ascending: false })
+      .limit(3),
   ]);
 
   const displayName =
@@ -202,6 +212,7 @@ export default async function ProducteurPage() {
   const recentEpisodes = recentEpisodesRes.data ?? [];
   const recentMissions = recentMissionsRes.data ?? [];
   const recentInvoices = recentInvoicesRes.data ?? [];
+  const recentMeetings = recentMeetingsRes.data ?? [];
 
   return (
     <>
@@ -366,13 +377,91 @@ export default async function ProducteurPage() {
         </FeedCard>
       </section>
 
-      {/* Compte-rendu de réunion (Gemini) */}
-      <section className="mb-4">
+      {/* Comptes-rendus de réunion (Gemini) */}
+      <section className="mb-4 grid gap-3 sm:gap-4 lg:grid-cols-[1fr_2fr]">
         <MeetingSummaryButton />
+
+        <div className="glass-panel flex flex-col rounded-xl p-3 sm:rounded-2xl sm:p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-foreground/10 bg-foreground/[0.03] sm:h-8 sm:w-8">
+                <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
+              </div>
+              <h3 className="font-heading text-sm font-medium sm:text-base">
+                CR récents
+              </h3>
+            </div>
+            <Link
+              href="/producteur/meetings"
+              className="text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+              aria-label="Voir tous les comptes-rendus"
+            >
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+          {recentMeetings.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-foreground/10 px-3 py-6 text-center text-xs text-muted-foreground">
+              Aucun compte-rendu pour l'instant.
+            </p>
+          ) : (
+            <div className="space-y-1.5">
+              {recentMeetings.map((m) => (
+                <Link
+                  key={m.id}
+                  href={`/producteur/meetings/${m.id}`}
+                  className="flex min-w-0 items-center gap-2 rounded-lg border border-foreground/[0.06] bg-foreground/[0.02] p-2 transition-colors hover:bg-foreground/[0.06]"
+                >
+                  <span
+                    title={MEETING_STATUS_LABEL[m.status] ?? m.status}
+                    className={cn(
+                      "shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider",
+                      MEETING_STATUS_TONE[m.status] ??
+                        MEETING_STATUS_TONE.pending,
+                    )}
+                  >
+                    {MEETING_STATUS_SHORT[m.status] ?? m.status.slice(0, 3).toUpperCase()}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium leading-tight">
+                      {m.title}
+                    </p>
+                    <p className="truncate text-[10px] text-muted-foreground">
+                      {m.source_type === "audio" ? "🎙 Audio" : "📝 Texte"} ·{" "}
+                      {timeAgo(m.created_at)}
+                    </p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
       </section>
     </>
   );
 }
+
+const MEETING_STATUS_LABEL: Record<string, string> = {
+  pending: "En attente",
+  uploading: "Envoi audio",
+  analyzing: "Analyse",
+  done: "Prêt",
+  error: "Erreur",
+};
+const MEETING_STATUS_SHORT: Record<string, string> = {
+  pending: "ATT",
+  uploading: "ENV",
+  analyzing: "IA",
+  done: "OK",
+  error: "ERR",
+};
+const MEETING_STATUS_TONE: Record<string, string> = {
+  pending: "border-foreground/15 bg-foreground/[0.04] text-muted-foreground",
+  uploading:
+    "border-[oklch(0.65_0.22_50/0.5)] bg-[oklch(0.5_0.22_50/0.15)] text-[oklch(0.88_0.18_50)]",
+  analyzing: "border-primary/40 bg-primary/[0.08] text-primary",
+  done: "border-[oklch(0.65_0.2_140/0.5)] bg-[oklch(0.5_0.18_140/0.15)] text-[oklch(0.85_0.18_140)]",
+  error: "border-destructive/30 bg-destructive/10 text-destructive",
+};
 
 function FeedCard({
   icon: Icon,
