@@ -211,37 +211,40 @@ export async function triggerMeetingAudioProcessing(
     };
   }
 
-  try {
-    const res = await fetch(
-      `${supabaseUrl}/functions/v1/process-meeting-audio`,
-      {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${serviceKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ report_id: reportId }),
-      },
-    );
+  // Construit une URL propre (gère le trailing slash éventuel)
+  const fnUrl = `${supabaseUrl.replace(/\/+$/, "")}/functions/v1/process-meeting-audio`;
 
-    if (!res.ok && res.status !== 202) {
+  try {
+    const res = await fetch(fnUrl, {
+      method: "POST",
+      headers: {
+        // Supabase Edge Functions acceptent indifféremment le service role
+        // ou l'anon key comme bearer ; on envoie aussi l'apikey header au
+        // cas où certaines régions le requièrent.
+        "Authorization": `Bearer ${serviceKey}`,
+        "apikey": serviceKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ report_id: reportId }),
+    });
+
+    // 202 (acceptée pour traitement async) ou 200 = succès. Tout autre code
+    // = problème, on log le détail et on marque le record en erreur.
+    if (res.status !== 200 && res.status !== 202) {
       const text = await res.text();
-      console.error(
-        `[meeting] edge function returned ${res.status}: ${text.slice(0, 300)}`,
-      );
-      // Mark the report as error so the UI can show something
+      const detail = `HTTP ${res.status} sur ${fnUrl} — ${text.slice(0, 400)}`;
+      console.error(`[meeting] edge function refus : ${detail}`);
       const admin = createAdminClient();
       await admin
         .from("meeting_reports")
         .update({
           status: "error" as MeetingReportStatus,
-          error_message: `Echec déclenchement Edge Function (${res.status})`,
+          error_message: detail.slice(0, 1000),
         })
         .eq("id", reportId);
       return {
         ok: false,
-        error:
-          "Impossible de démarrer le traitement audio. Vérifie que l'Edge Function `process-meeting-audio` est déployée.",
+        error: `Edge Function inaccessible (${res.status}). Détail : ${text.slice(0, 200)}`,
       };
     }
 
@@ -250,8 +253,22 @@ export async function triggerMeetingAudioProcessing(
     return { ok: true };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Erreur inconnue.";
-    console.error(`[meeting] trigger error: ${msg}`);
-    return { ok: false, error: msg };
+    console.error(`[meeting] trigger error vers ${fnUrl} : ${msg}`);
+    // Marque aussi le record en erreur pour ne pas laisser un orphelin
+    // bloqué en pending
+    try {
+      const admin = createAdminClient();
+      await admin
+        .from("meeting_reports")
+        .update({
+          status: "error" as MeetingReportStatus,
+          error_message: `Network: ${msg}`.slice(0, 1000),
+        })
+        .eq("id", reportId);
+    } catch {
+      // best-effort
+    }
+    return { ok: false, error: `Échec d'appel Edge Function : ${msg}` };
   }
 }
 
