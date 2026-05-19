@@ -133,6 +133,7 @@ prod/
 | `client_profiles` | Producteur (CRUD) + client (read self) | Infos étendues côté client : raison sociale, adresse de facturation, SIRET, n° TVA, téléphone, contact… Sert au bloc « Client » des factures PDF. Pattern miroir de `prestataire_profiles` |
 | `invoices` | Producteur (CRUD) + client (SELECT non-draft) | En-tête facture : `number` auto (LUM-YYYY-NNN), `status` (draft/sent/paid/overdue/cancelled), dates, totaux HT/TVA/TTC, `studio_snapshot` + `client_snapshot` (figés à émission, refresh sur update tant que draft) |
 | `invoice_lines` | Mêmes droits que `invoices` | Lignes : description, qty, PU HT, taux TVA, totaux dérivés |
+| `meeting_reports` | Producteur (CRUD) | Comptes-rendus de réunion générés par Gemini. `source_type` ('text'/'audio'), `status` workflow (pending → uploading → analyzing → done/error), `summary jsonb` (titre, tldr, décisions, actions, points clés, questions ouvertes), recherche full-text via colonne générée `search_text` + index GIN tsvector français. Realtime activé pour notifier la UI à la fin du traitement async |
 
 ### RLS — modèle mental
 - Le **producteur** voit tout, peut tout — **sauf qu'un projet n'est visible que pour les producteurs qui y sont explicitement assignés** (`project_producteurs`). Helper SQL `public.is_producteur()` pour vérifier le rôle, `public.is_project_producteur(p_id)` pour vérifier l'assignation projet.
@@ -231,6 +232,21 @@ Projet ──┬──> Émission 1 ──┬──> Mission 1 (droniste, 15/07,
 - **PDF** : généré server-side avec `@react-pdf/renderer` (`src/lib/invoice-pdf.tsx`). Streamé par `GET /api/invoices/[id]/pdf`. RLS-checked : le user-scoped client Supabase tente d'abord un `SELECT id` pour valider l'accès, puis l'admin client fait le full read.
 - **Studio info** : hardcodé dans `src/lib/studio-info.ts`. À déplacer dans une table `studio_settings` si on a un jour plusieurs studios sur la même instance LUMEN.
 
+### 5.9 Comptes-rendus de réunion (P6)
+- 2 modes d'entrée :
+  - **Texte** : on colle des notes/transcription, Gemini résume en sync (server action `createMeetingReportFromText`). Persisté direct en `status='done'`.
+  - **Audio** : on uploade un fichier (MP3/M4A/WAV/OGG/FLAC/AAC, jusqu'à 2 GB ≈ 9 h). Pipeline async pour ne pas dépendre du timeout Vercel.
+- **Pipeline audio (async)** :
+  1. Browser uploade direct vers Storage via signed URL (XHR avec progress bar). Server action `requestMeetingAudioUpload` crée le record en `status='pending'`.
+  2. Server action `triggerMeetingAudioProcessing` POST vers l'Edge Function `process-meeting-audio` (fire-and-forget).
+  3. Edge Function Deno : download Storage → upload Google Files API (resumable) → wait state ACTIVE → call Gemini 2.5 Flash avec le `file_uri` + JSON schema + `thinking_config.thinking_budget=0` → update record `status='done'` + `summary` jsonb. Cleanup remote file.
+  4. UI s'abonne à Supabase Realtime sur `meeting_reports.id=eq.<id>` → notification quand `status='done'` ou `status='error'`.
+- **Pourquoi Edge Function et pas server action ?** Vercel Free timeout = 10s. Gemini sur 3h audio = 60-90s. Supabase Edge Functions = 150s timeout en gratuit, largement assez.
+- **Realtime** : la table `meeting_reports` doit être dans la publication `supabase_realtime` (cf. migration 014). Pattern identique au moodboard (migration 008).
+- **Schema résumé** : `summary jsonb` avec `title`, `tldr`, `decisions[]`, `actions[]` (avec `owner` + `deadline` optionnels), `key_points[]`, `open_questions[]`. Identique entre texte et audio pour qu'un même viewer (`SummaryViewer`) affiche les deux.
+- **Recherche full-text** : colonne générée `search_text` (title + summary.title + summary.tldr) + index GIN `to_tsvector('french', search_text)`. Pour l'instant on fait une simple `ILIKE` côté query — facile de basculer vers `websearch_to_tsquery` quand on aura plus de matière.
+- **Quotas Gemini** : 10 RPM gratuit sur 2.5-flash. Avec `maxRetries: 0` sur generateObject (texte) et un appel direct côté Edge Function (audio), on consomme 1 unité de quota par CR. Si on dépasse → message d'erreur amélioré avec délai retry exact (`Réessaye dans Xs`).
+
 ---
 
 ## 6. Sécurité
@@ -273,7 +289,8 @@ Réinitialisables via `npm run seed` (idempotent).
 | **P3** | ✅ | Hubs clients (upload/download fichiers) — Supabase Storage |
 | **P4** | ⏳ | Calendrier + notifications temps réel (Supabase Realtime) |
 | **P5** | ✅ | Facturation : tables `invoices` + `invoice_lines` + `client_profiles`, auto-numérotation, snapshots, PDF stylisé LUMEN (293B), download côté client et producteur |
-| **post-MVP** | ⏳ | PWA, Web Push, WebAuthn, édition texte temps réel (Yjs), workflow devis |
+| **P6** | ✅ | Comptes-rendus de réunion : texte ou audio (jusqu'à 2 GB / 9 h), Edge Function Deno + Gemini File API, async via Realtime, historique recherchable plein-texte, rattachement optionnel à un projet |
+| **post-MVP** | ⏳ | PWA, Web Push, WebAuthn, édition texte temps réel (Yjs), workflow devis, génération IA enrichie de projets (avec moodboard/script/shot list) |
 
 ---
 
@@ -294,6 +311,10 @@ Réinitialisables via `npm run seed` (idempotent).
 - ✋ **Un fichier `"use server"` ne peut exporter QUE des fonctions async.** Exporter une `const` (ex: tableau d'enum) ou un objet fait crasher l'app au render avec `A "use server" file can only export async functions, found object`. Mettre les constantes/types partagés dans un fichier séparé (ex: `episode-types.ts`) que `actions.ts` et la UI importent tous les deux.
 - ✋ **`Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" })` casse dans `@react-pdf/renderer`.** L'API insère un narrow no-break space (U+202F) entre les milliers et avant le symbole € ; la police par défaut (Helvetica) ne sait pas le rendre et affiche une glyphe absente (typiquement un slash → `1/750 €`). Solution dans le PDF : formater à la main avec des espaces classiques (`replace(/\B(?=(\d{3})+(?!\d))/g, " ")`). Garder `Intl` dans la UI web où le NBSP rend bien et empêche les sauts de ligne au milieu des nombres.
 - ✋ **Le particule du nom de famille doit être tapée à part.** Le nom légal officiel de Thibault est « DE LEPINE » (le « de » fait partie du nom de famille, pas une particule de noblesse séparable). Hardcodé dans `src/lib/studio-info.ts` → tout changement du nom légal y est à modifier (et les anciennes factures gardent le `studio_snapshot` figé donc rien à migrer).
+- ✋ **Gemini 2.5 Flash a un mode `thinking` activé par défaut** qui consomme jusqu'à 24k tokens INTERNES avant d'émettre la sortie. Avec un schéma riche ça tronque le JSON → "no object generated". Toujours désactiver explicitement avec `providerOptions: { google: { thinkingConfig: { thinkingBudget: 0 } } }` côté AI SDK Vercel, ou `generation_config: { thinking_config: { thinking_budget: 0 } }` côté API REST directe (Edge Function). Côté Edge Function on l'utilise déjà dans `process-meeting-audio`.
+- ✋ **`maxRetries` de l'AI SDK Vercel est à 3 par défaut.** Avec le quota gratuit Gemini (10 RPM sur 2.5-flash, 15 RPM sur 2.0-flash), 1 appel = jusqu'à 3 tentatives vers l'API → crame le quota en quelques essais. Toujours mettre `maxRetries: 0` sur `generateObject` / `generateText`. Notre code applique déjà cette règle dans tous les générateurs (`project-generator.ts`, `meeting-summarizer.ts`).
+- ✋ **Supabase Realtime ne broadcast pas par défaut.** Pour qu'une table émette des events `INSERT`/`UPDATE`/`DELETE` aux clients abonnés, elle doit être dans la publication `supabase_realtime`. Pattern à mettre dans chaque migration concernée : `alter publication supabase_realtime add table public.<nom>;` (idempotent via `do $$ ... exception when duplicate_object then null; end $$;`). Tables déjà actives : `board_items`, `board_connections` (migration 008), `meeting_reports` (migration 014).
+- ✋ **Les Edge Functions Supabase sont en Deno, pas en Node.** Le type-check Next.js ne sait pas parser leurs imports `https://esm.sh/...` ni le global `Deno.*`. Toujours **exclure `supabase/functions` du `tsconfig.json`** (`"exclude": ["node_modules", "supabase/functions"]`). Sinon `npm run build` plante avec `Cannot find name 'Deno'`.
 
 ---
 

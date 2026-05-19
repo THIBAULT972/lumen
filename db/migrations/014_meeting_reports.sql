@@ -103,6 +103,16 @@ create policy meeting_reports_delete on public.meeting_reports
 grant all on public.meeting_reports to service_role;
 grant select, insert, update, delete on public.meeting_reports to authenticated;
 
+-- =========================================================================
+-- REALTIME (pour la notification client quand le traitement audio est fini)
+-- =========================================================================
+-- Sans ça, les UPDATE de la ligne par l'Edge Function ne sont pas broadcastés
+-- aux producteurs connectés. Pattern identique à la migration 008 (board).
+do $$
+begin
+  alter publication supabase_realtime add table public.meeting_reports;
+exception when duplicate_object then null; end $$;
+
 notify pgrst, 'reload schema';
 
 commit;
